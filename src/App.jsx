@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Wallet, Building2, Bitcoin, Plus, Trash2, RefreshCw,
     TrendingUp, DollarSign, PiggyBank, Cloud, CloudOff,
     Loader2, Globe, Landmark, Eye, EyeOff, PieChart as PieChartIcon,
     ChevronDown, ChevronRight, Euro, Coins, Settings, ArrowUpRight, ArrowDownRight, Activity, 
-    LineChart as LineChartIcon, LogIn, UserPlus, LogOut, ExternalLink, ShieldAlert, Sparkles, Calendar, Newspaper, DollarSign as DollarIcon
+    LineChart as LineChartIcon, LogIn, UserPlus, LogOut, ExternalLink, ShieldAlert, Sparkles, Calendar, Newspaper, Send, User
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, AreaChart, Area, XAxis, YAxis } from 'recharts';
 
-// --- CONFIGURACIÓN DE BASE DE DATOS Y USUARIOS (FIREBASE) ---
+// --- CONFIGURACIÓN ESTRICTA DE BASE DE DATOS Y USUARIOS (FIREBASE) ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
-// Credenciales oficiales de tu proyecto Firebase 'dikystar-investment'
-const VERCEL_FIREBASE_CONFIG = {
+// Credenciales oficiales fijas de tu proyecto Firebase (Garantiza Sync en PC y Celular)
+const FIREBASE_CONFIG = {
     apiKey: "AIzaSyDJEA-eT-3vGiZwPkkk6ixn88i75qwp-vY",
     authDomain: "dikystar-investment.firebaseapp.com",
     projectId: "dikystar-investment",
@@ -23,34 +23,10 @@ const VERCEL_FIREBASE_CONFIG = {
     appId: "1:273717181133:web:e4a98b67474e1d84aec784"
 };
 
-// Aislamiento estricto de entornos para evitar el error 'auth/api-key-not-valid'
-const isCanvasSandbox = typeof __initial_auth_token !== 'undefined' && __initial_auth_token;
-
-const getFirebaseConfig = () => {
-    // Si estamos en el editor de StackBlitz, usamos OBLIGATORIAMENTE la config inyectada
-    if (isCanvasSandbox && typeof __firebase_config !== 'undefined' && __firebase_config) {
-        try { return JSON.parse(__firebase_config); } catch (e) {}
-    }
-    // En Vercel / Laptop / iPhone, usamos tus credenciales reales
-    return VERCEL_FIREBASE_CONFIG;
-};
-
-const config = getFirebaseConfig();
-const isFirebaseConfigured = config && config.apiKey && config.apiKey !== "TU_API_KEY";
-let app, auth, db, appId;
-
-if (isFirebaseConfigured) {
-    try {
-        app = initializeApp(config);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'dikystar-main-app';
-        // Sanitizamos el appId eliminando barras diagonales para evitar errores de segmentos impares en la base de datos de Firebase
-        appId = rawAppId.replace(/\//g, '_');
-    } catch (e) {
-        console.error("Error inicializando Firebase:", e);
-    }
-}
+// Inicialización blindada
+const app = initializeApp(FIREBASE_CONFIG);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 // --- DICCIONARIO DE IDIOMAS (ESPAÑOL / INGLÉS) ---
 const TRANSLATIONS = {
@@ -63,10 +39,7 @@ const TRANSLATIONS = {
         register: "Registrarme",
         noAccount: "¿No tienes cuenta? Crea una gratis",
         haveAccount: "¿Ya tienes cuenta? Inicia sesión",
-        localModeTitle: "Ejecutando en Modo Local (Esta PC)",
-        localModeDesc: "Tus datos se guardan en el navegador. Para sincronizar con el celular, configura tus claves en el código.",
-        savingCloud: "Guardando en la nube...",
-        savingLocal: "Modo Local (Guardando en PC)",
+        savingCloud: "Sincronizando...",
         totalWealth: "Patrimonio Total",
         tradingView: "Mercados TradingView",
         allPortfolios: "Todas las Carteras",
@@ -109,18 +82,15 @@ const TRANSLATIONS = {
         other: "Otros",
         aiAdvisor: "Asesor IA",
         aiTitle: "DikyStar Inteligencia Artificial",
-        aiTabAnalysis: "Análisis & Sugerencias",
-        aiTabNews: "Noticias de Impacto",
-        aiTabCalendar: "Calendario Semanal",
-        aiTabQuotes: "Mercado en Vivo",
-        aiProfileLabel: "Perfil del Inversor",
+        aiProfileLabel: "Perfil de Riesgo",
         aiProfileCons: "Conservador",
         aiProfileMod: "Moderado",
         aiProfileAgg: "Agresivo",
-        aiAnalyzeBtn: "Generar Análisis con IA",
-        aiLoadingText: "Analizando mercados globales...",
-        aiErrorMsg: "No se pudo conectar con el servidor de IA. Inténtalo de nuevo.",
-        aiSystemPrompt: "Eres un analista financiero de élite y asesor de inversiones de DikyStar Investment. Tu objetivo es dar sugerencias profesionales estructuradas, lógicas y sumamente útiles basadas en datos en tiempo real de búsqueda y el perfil del inversor. Si se solicita análisis de cartera, audita los activos proporcionados."
+        aiChatPlaceholder: "Haz una pregunta sobre finanzas, tu cartera o mercados...",
+        aiQuickAnalysis: "Analizar mi Cartera",
+        aiQuickNews: "Noticias de Hoy",
+        aiQuickCalendar: "Calendario Económico",
+        aiQuickMarkets: "Resumen de Mercados"
     },
     en: {
         title: "investment",
@@ -131,10 +101,7 @@ const TRANSLATIONS = {
         register: "Register",
         noAccount: "Don't have an account? Sign up free",
         haveAccount: "Already have an account? Log in",
-        localModeTitle: "Running in Local Mode (This PC)",
-        localModeDesc: "Your data is stored in your browser. To sync with mobile, set up your keys in the code.",
-        savingCloud: "Saving to cloud...",
-        savingLocal: "Local Mode (Saving on PC)",
+        savingCloud: "Syncing...",
         totalWealth: "Total Wealth",
         tradingView: "TradingView Markets",
         allPortfolios: "All Portfolios",
@@ -177,18 +144,15 @@ const TRANSLATIONS = {
         other: "Others",
         aiAdvisor: "AI Advisor",
         aiTitle: "DikyStar Artificial Intelligence",
-        aiTabAnalysis: "Analysis & Tips",
-        aiTabNews: "High-Impact News",
-        aiTabCalendar: "Weekly Calendar",
-        aiTabQuotes: "Live Market",
-        aiProfileLabel: "Investor Profile",
+        aiProfileLabel: "Risk Profile",
         aiProfileCons: "Conservative",
         aiProfileMod: "Moderate",
         aiProfileAgg: "Aggressive",
-        aiAnalyzeBtn: "Generate AI Analysis",
-        aiLoadingText: "Analyzing global financial markets...",
-        aiErrorMsg: "Could not connect to the AI server. Please try again.",
-        aiSystemPrompt: "You are an elite financial analyst and investment advisor for DikyStar Investment. Your goal is to provide highly structured, logical, and extremely actionable investment suggestions based on real-time search data and the user's investor profile. Audited portfolio assets if provided."
+        aiChatPlaceholder: "Ask a question about finance, your portfolio or markets...",
+        aiQuickAnalysis: "Analyze my Portfolio",
+        aiQuickNews: "Today's News",
+        aiQuickCalendar: "Economic Calendar",
+        aiQuickMarkets: "Market Summary"
     }
 };
 
@@ -297,7 +261,7 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang
     const [chartData, setChartData] = useState([]);
     const [isChartLoading, setIsChartLoading] = useState(false);
 
-    const isFiat = asset.assetType === 'fiat';
+    const isFiat = asset.assetType === 'fiat' || asset.assetType === 'manual';
 
     const yieldAmount = React.useMemo(() => {
         if (!asset.apy || parseFloat(asset.apy) <= 0 || !asset.apyStartDate) return 0;
@@ -512,15 +476,112 @@ export default function App() {
     const [newAsset, setNewAsset] = useState({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' });
     const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
-    // --- ESTADOS DEL ASESOR DE IA ---
+    // --- ESTADOS DEL ASESOR DE IA (CHAT) ---
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-    const [aiTab, setAiTab] = useState('analysis'); 
     const [investorProfile, setInvestorProfile] = useState('moderate'); 
-    const [aiResponse, setAiResponse] = useState('');
+    const [aiMessages, setAiMessages] = useState([]);
+    const [aiInput, setAiInput] = useState('');
     const [aiLoading, setAiLoading] = useState(false);
     const [aiError, setAiError] = useState('');
+    const chatEndRef = useRef(null);
 
-    // --- CÁLCULOS AUXILIARES ---
+    // --- EFECTOS DE AUTENTICACIÓN ESTRICTA ---
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (u) => {
+            setUser(u);
+            setAuthLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // --- CARGAR DATOS DESDE LOCAL STORAGE Y FIRESTORE ---
+    useEffect(() => {
+        const loadLocal = () => {
+            const local = localStorage.getItem('DikyStarPortfolios_v2');
+            if (local) {
+                try { setPortfolios(JSON.parse(local)); } catch (e) { console.error(e); }
+            }
+        };
+
+        if (!user) {
+            loadLocal();
+            return;
+        }
+
+        const fetchData = async () => {
+            try {
+                setSyncStatus('syncing');
+                // Ruta de colecciones 100% sana y segura
+                const docRef = doc(db, 'artifacts', 'dikystar-app', 'users', user.uid, 'user_data', 'portfolios');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists() && docSnap.data().portfolios) {
+                    setPortfolios(docSnap.data().portfolios);
+                } else {
+                    loadLocal();
+                }
+                setSyncStatus('synced');
+            } catch (e) { 
+                console.error("Error cargando de la nube", e);
+                loadLocal();
+            }
+        };
+        fetchData();
+    }, [user]);
+
+    // --- GUARDAR DATOS EN FIRESTORE Y LOCAL ---
+    useEffect(() => {
+        if (portfolios.length === 0) return;
+        
+        localStorage.setItem('DikyStarPortfolios_v2', JSON.stringify(portfolios));
+        updateAllPrices();
+
+        if (user) {
+            const saveData = async () => {
+                setSyncStatus('syncing');
+                try {
+                    const docRef = doc(db, 'artifacts', 'dikystar-app', 'users', user.uid, 'user_data', 'portfolios');
+                    await setDoc(docRef, { portfolios });
+                    setSyncStatus('synced');
+                } catch (e) { console.error("Error guardando en la nube", e); }
+            };
+            saveData();
+        }
+    }, [portfolios]);
+
+    useEffect(() => {
+        if (dashboardTab === 'evolution') {
+            loadGlobalChart();
+        }
+    }, [dashboardTab, globalChartTimeframe, activePortfolioId, user]);
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [aiMessages]);
+
+    // --- FUNCIONES DE AUTENTICACIÓN ---
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        try {
+            if (authMode === 'login') await signInWithEmailAndPassword(auth, authEmail, authPassword);
+            else await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        } catch (err) {
+            if (err.code === 'auth/weak-password') setAuthError(t.errorWeakPassword);
+            else if (err.code === 'auth/email-already-in-use') setAuthError(t.errorEmailInUse);
+            else if (err.code === 'auth/invalid-email') setAuthError(t.errorInvalidEmail);
+            else if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(err.code)) setAuthError(t.errorCredentials);
+            else setAuthError(`Error: ${err.message}`);
+        }
+    };
+
+    const handleLogout = () => {
+        if (auth) signOut(auth);
+        setUser(null);
+        setPortfolios([]);
+        localStorage.removeItem('DikyStarPortfolios_v2');
+    };
+
+    // --- CÁLCULOS AUXILIARES GLOBALES Y PRECIOS ---
     const getCryptoCategory = (symbol) => {
         const s = symbol.toUpperCase();
         if (['USDT','USDC','DAI','FDUSD','TUSD'].includes(s)) return t.stablecoins;
@@ -628,213 +689,68 @@ export default function App() {
         if (dashboardTab === 'evolution') loadGlobalChart();
     };
 
-    // --- EFECTOS DE AUTENTICACIÓN ---
-    useEffect(() => {
-        // Si Firebase no está configurado de forma real con una clave API que comience con 'AIzaSy', evitamos arrancar los oyentes y el initAuth
-        if (!isFirebaseConfigured) {
-            setAuthLoading(false);
-            return;
-        }
-        
-        const initAuth = async () => {
-            try {
-                // Validación para evitar llamadas a la API de Firebase si hay tokens incorrectos del sandbox de StackBlitz
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token && __initial_auth_token.trim() !== "") {
-                    // Validar si la api key provista de Firebase es funcional antes de iniciar
-                    if (auth && auth.config && auth.config.apiKey && auth.config.apiKey.startsWith("AIzaSy")) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    }
-                }
-            } catch (e) {
-                console.error("Error durante initAuth de Firebase (Sandbox detectado):", e);
-            } finally {
-                setAuthLoading(false);
-            }
-        };
+    // --- NUEVO ASESOR DE IA ESPECIALIZADO (CHAT INTERACTIVO Y CONSCIENTE DEL CONTEXTO) ---
+    const handleSendAiMessage = async (e = null, quickPrompt = null) => {
+        if (e) e.preventDefault();
+        const userText = quickPrompt || aiInput;
+        if (!userText.trim()) return;
 
-        initAuth();
-        
-        let unsubscribe = () => {};
-        if (auth) {
-            unsubscribe = onAuthStateChanged(auth, (u) => {
-                setUser(u);
-                setAuthLoading(false);
-            });
-        }
-        return () => unsubscribe();
-    }, []);
-
-    // --- CARGAR DATOS DESDE LOCAL STORAGE Y FIRESTORE ---
-    useEffect(() => {
-        const loadLocal = () => {
-            const local = localStorage.getItem('DikyStarPortfolios_v2');
-            if (local) {
-                try { setPortfolios(JSON.parse(local)); } catch (e) { console.error(e); }
-            }
-        };
-
-        if (!isFirebaseConfigured) {
-            loadLocal();
-            return;
-        }
-
-        if (!user) {
-            loadLocal();
-            return;
-        }
-
-        const fetchData = async () => {
-            try {
-                setSyncStatus('syncing');
-                // MODIFICADO: Cambiamos a una ruta de documento segura con segmentos pares y sanos compatible con Rule 1 y appId sanitizada sin slashes
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'portfolios', 'user_data');
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists() && docSnap.data().portfolios) {
-                    setPortfolios(docSnap.data().portfolios);
-                } else {
-                    const local = localStorage.getItem('DikyStarPortfolios_v2');
-                    if (local) setPortfolios(JSON.parse(local));
-                }
-                setSyncStatus('synced');
-            } catch (e) { 
-                console.error("Error cargando de la nube", e);
-                loadLocal();
-            }
-        };
-        fetchData();
-    }, [user]);
-
-    // --- GUARDAR DATOS EN FIRESTORE Y LOCAL ---
-    useEffect(() => {
-        if (portfolios.length === 0) return;
-        
-        localStorage.setItem('DikyStarPortfolios_v2', JSON.stringify(portfolios));
-        updateAllPrices();
-
-        if (user && isFirebaseConfigured) {
-            const saveData = async () => {
-                setSyncStatus('syncing');
-                try {
-                    // MODIFICADO: Cambiamos a una ruta de documento segura con segmentos pares y sanos compatible con Rule 1 y appId sanitizada sin slashes
-                    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'portfolios', 'user_data');
-                    await setDoc(docRef, { portfolios });
-                    setSyncStatus('synced');
-                } catch (e) { console.error("Error guardando en la nube", e); }
-            };
-            saveData();
-        }
-    }, [portfolios]);
-
-    useEffect(() => {
-        if (dashboardTab === 'evolution') {
-            loadGlobalChart();
-        }
-    }, [dashboardTab, globalChartTimeframe, activePortfolioId, user]);
-
-    // --- FUNCIONES DE AUTENTICACIÓN ---
-    const handleAuth = async (e) => {
-        e.preventDefault();
-        setAuthError('');
-        try {
-            if (authMode === 'login') await signInWithEmailAndPassword(auth, authEmail, authPassword);
-            else await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-        } catch (err) {
-            console.error("Firebase Auth Error:", err);
-            if (err.code === 'auth/operation-not-allowed') {
-                setAuthError(lang === 'es' ? '❌ Error: Debes habilitar "Correo/Contraseña" en la consola de Firebase (Sección Authentication).' : '❌ Error: You must enable "Email/Password" in Firebase Authentication.');
-            } else if (err.code === 'auth/weak-password') {
-                setAuthError(t.errorWeakPassword);
-            } else if (err.code === 'auth/email-already-in-use') {
-                setAuthError(t.errorEmailInUse);
-            } else if (err.code === 'auth/invalid-email') {
-                setAuthError(t.errorInvalidEmail);
-            } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-api-key') {
-                setAuthError(t.errorCredentials);
-            } else {
-                setAuthError(`Error: ${err.message}`);
-            }
-        }
-    };
-
-    const handleLogout = () => {
-        if (auth) signOut(auth);
-        setUser(null);
-        setPortfolios([]);
-        localStorage.removeItem('DikyStarPortfolios_v2');
-    };
-
-    // --- EJECUTAR CONSULTA DE IA CON GEMINI & GROUNDING ---
-    const handleRunAiAnalysis = async (customTab = aiTab) => {
+        // Añadimos el mensaje del usuario al chat
+        const newMessages = [...aiMessages, { role: 'user', text: userText, isQuick: !!quickPrompt }];
+        setAiMessages(newMessages);
+        setAiInput('');
         setAiLoading(true);
         setAiError('');
-        setAiResponse('');
+
+        // Recopilamos el CONTEXTO EXACTO Y EN VIVO DE TU APLICACIÓN para la IA
+        const simplifiedPortfolio = portfolios.map(p => ({
+            cartera: p.name,
+            activos: p.accounts.flatMap(a => a.assets.map(as => ({
+                simbolo: as.symbol, 
+                tipo: as.assetType,
+                unidades: parseFloat(as.amount).toFixed(4),
+                valor_actual_usd: getAssetValueUSD(as).toFixed(2)
+            })))
+        }));
+
+        const systemPrompt = `
+        Eres DikyStar AI, un asesor y analista financiero de élite, sumamente especializado en mercados globales, Argentina y Brasil.
+        Tu objetivo es ofrecer respuestas directas, profesionales, estructuradas y precisas al usuario.
+        
+        INFORMACIÓN ESTRICTAMENTE ACTUALIZADA EN VIVO DEL USUARIO:
+        - Perfil de Riesgo del Inversor: ${investorProfile.toUpperCase()}
+        - Patrimonio Total: $${globalStats.current.toFixed(2)} USD
+        - Composición de Cartera Actual: ${JSON.stringify(simplifiedPortfolio)}
+        - Precios en Vivo (obtenidos de Binance y Yahoo Finance): ${JSON.stringify(marketPrices)}
+        - Tipos de Cambio Reales: ARS (Dólar Blue) = ${forexRates.ARS}, EUR = ${forexRates.EUR}, BRL = ${forexRates.BRL}
+
+        INSTRUCCIONES CLAVE:
+        1. Utiliza los precios y datos de la cartera provistos arriba como fuente de verdad absoluta. No intentes adivinarlos.
+        2. Si el usuario pide un análisis de cartera, audita los datos que te he pasado, critica la diversificación y sugiere activos concretos y específicos de acuerdo a su Perfil de Riesgo y el entorno macro actual.
+        3. Si pide noticias o calendario, usa el Grounding de Google Search para darle información relevante a HOY.
+        4. Escribe tus respuestas usando formato Markdown para que sean legibles (usa negritas, listas y subtítulos).
+        `;
+
+        // Preparamos el payload con historial de chat
+        const chatHistory = newMessages.filter(m => !m.isQuick).map(m => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }]
+        }));
+
+        // Si es una acción rápida, simplemente enviamos el prompt como instrucción actual
+        if (!!quickPrompt) {
+            chatHistory.push({ role: 'user', parts: [{ text: quickPrompt }] });
+        }
+
+        const payload = {
+            contents: chatHistory,
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            tools: [{ "google_search": {} }] // Grounding Activo para Google
+        };
 
         const apiKey = ""; 
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
-        // Obtener activos detallados para armar la pregunta
-        let assetsTextList = [];
-        portfolios.forEach(port => {
-            port.accounts.forEach(acc => {
-                acc.assets.forEach(as => {
-                    const val = getAssetValueUSD(as);
-                    assetsTextList.push(`- ${as.symbol}: ${parseFloat(as.amount).toFixed(4)} unidades (Valor aprox: $${val.toFixed(2)} USD, Tipo: ${as.assetType})`);
-                });
-            });
-        });
-
-        const assetsString = assetsTextList.length > 0 ? assetsTextList.join("\n") : "La cartera del usuario está actualmente vacía.";
-
-        // Personalización de la consulta según la pestaña activa
-        let promptText = "";
-        if (customTab === 'analysis') {
-            promptText = `
-            Audita y analiza esta cartera de inversión real y provee sugerencias:
-            - Perfil de riesgo seleccionado del Inversor: ${investorProfile.toUpperCase()}
-            - Divisa de visualización: ${displayCurrency}
-            - Composición de Activos cargados:
-            ${assetsString}
-
-            Por favor, elabora:
-            1. Un diagnóstico de Diversificación y distribución de riesgo.
-            2. Análisis fundamental y técnico simplificado de los activos principales que posee el usuario (identificando patrones recientes o zonas de soporte/resistencia importantes si corresponde).
-            3. Sugerencias de inversión personalizadas y directas que encajen estrictamente con su perfil (${investorProfile.toUpperCase()}) y con las condiciones macroeconómicas globales vigentes de esta semana.
-            `;
-        } else if (customTab === 'news') {
-            promptText = `
-            Busca y resume las 5 noticias financieras y macroeconómicas de hoy más importantes de forma global, en Estados Unidos, Europa y con un enfoque relevante en el mercado de Argentina. 
-            Sé sumamente conciso, estructurado, profesional y explica brevemente por qué estas noticias impactan a un inversor promedio de acciones, CEDEARs o criptomonedas.
-            `;
-        } else if (customTab === 'calendar') {
-            promptText = `
-            Busca y presenta de forma clara y formateada el calendario económico de esta semana con eventos macroeconómicos críticos internacionales (decisiones de tasas de interés de la FED, inflación CPI de EEUU, datos de empleo, reportes de ganancias corporativas clave, etc.). 
-            Para cada evento, indica: Fecha/Hora aproximada, País/Región, Evento, Impacto esperado (Bajo/Medio/Alto) y breve sugerencia de protección de cartera.
-            `;
-        } else if (customTab === 'quotes') {
-            promptText = `
-            Busca y provee las cotizaciones de mercado en tiempo real más importantes de hoy, incluyendo:
-            - Principales índices bursátiles globales (S&P 500, Nasdaq, Dow Jones) y locales (Merval de Argentina).
-            - Principales tipos de cambio de hoy en Argentina (Dólar oficial, Dólar Blue, Dólar MEP, Dólar CCL).
-            - Cotizaciones de monedas internacionales frente al dólar (Euro, Real Brasileño).
-            - Cotización en tiempo real de Bitcoin (BTC) y Ethereum (ETH).
-            Formatea los datos en una tabla limpia usando Markdown.
-            `;
-        }
-
-        // Estructura de payload oficial de Gemini con Google Search Grounding habilitado
-        const payload = {
-            contents: [{
-                parts: [{ text: promptText }]
-            }],
-            systemInstruction: {
-                parts: [{ text: t.aiSystemPrompt }]
-            },
-            tools: [{
-                "google_search": {} // Grounding activo para traer cotizaciones y noticias en tiempo real
-            }]
-        };
-
-        // Implementación con exponencial backoff para tolerancia a fallas de API
         const delay = (ms) => new Promise(res => setTimeout(res, ms));
         const backoffTimes = [1000, 2000, 4000, 8000, 16000];
         let attempt = 0;
@@ -849,9 +765,9 @@ export default function App() {
                 });
                 if (response.ok) {
                     const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) {
-                        setAiResponse(text);
+                    const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (textResponse) {
+                        setAiMessages(prev => [...prev, { role: 'model', text: textResponse }]);
                         success = true;
                         break;
                     }
@@ -860,50 +776,33 @@ export default function App() {
                 await delay(backoffTimes[attempt - 1]);
             } catch (e) {
                 attempt++;
-                if (attempt === 5) {
-                    setAiError(t.aiErrorMsg);
-                } else {
-                    await delay(backoffTimes[attempt - 1]);
-                }
+                if (attempt === 5) setAiError(t.aiErrorMsg);
+                else await delay(backoffTimes[attempt - 1]);
             }
         }
 
-        if (!success && !aiError) {
-            setAiError(t.aiErrorMsg);
-        }
+        if (!success && !aiError) setAiError(t.aiErrorMsg);
         setAiLoading(false);
     };
 
-    // Lanzar análisis cada vez que cambiamos de pestaña dentro del modal de IA
-    useEffect(() => {
-        if (isAiModalOpen) {
-            handleRunAiAnalysis(aiTab);
-        }
-    }, [aiTab, investorProfile, isAiModalOpen]);
-
-    // Función auxiliar para renderizar con formato estético los textos que retorna Gemini (Markdown)
     const renderFormattedAiText = (rawText) => {
         if (!rawText) return null;
-        
         return rawText.split('\n').map((line, idx) => {
             let processedLine = line;
-            let className = "text-slate-700 text-sm leading-relaxed mb-2.5";
+            let className = "text-slate-700 text-[15px] leading-relaxed mb-2.5";
 
             if (line.startsWith('### ')) {
+                className = "text-md font-extrabold text-slate-900 mt-5 mb-3 flex items-center gap-2 border-b border-slate-100 pb-1.5";
                 processedLine = line.replace('### ', '');
-                className = "text-md font-extrabold text-slate-900 mt-5 mb-3 flex items-center gap-2 border-b pb-1.5";
-            }
-            else if (line.startsWith('## ')) {
+            } else if (line.startsWith('## ')) {
+                className = "text-lg font-black text-indigo-900 mt-6 mb-3 flex items-center gap-2 border-b border-indigo-100 pb-2";
                 processedLine = line.replace('## ', '');
-                className = "text-lg font-black text-blue-900 mt-6 mb-3 flex items-center gap-2 border-b border-blue-100 pb-2";
-            }
-            else if (line.startsWith('# ')) {
-                processedLine = line.replace('# ', '');
+            } else if (line.startsWith('# ')) {
                 className = "text-xl font-black text-slate-900 mt-7 mb-4";
-            }
-            else if (line.startsWith('- ') || line.startsWith('* ')) {
-                processedLine = "• " + line.substring(2);
-                className = "text-slate-700 text-sm pl-4 mb-2.5 list-disc";
+                processedLine = line.replace('# ', '');
+            } else if (line.startsWith('- ') || line.startsWith('* ')) {
+                className = "text-slate-700 text-[15px] pl-4 mb-2 list-disc ml-2";
+                processedLine = line.substring(2);
             }
 
             const boldRegex = /\*\*(.*?)\*\*/g;
@@ -912,21 +811,13 @@ export default function App() {
             let match;
 
             while ((match = boldRegex.exec(processedLine)) !== null) {
-                if (match.index > lastIndex) {
-                    parts.push(processedLine.substring(lastIndex, match.index));
-                }
-                parts.push(<strong key={match.index} className="font-extrabold text-slate-900 bg-blue-50/50 px-1 rounded">{match[1]}</strong>);
+                if (match.index > lastIndex) parts.push(processedLine.substring(lastIndex, match.index));
+                parts.push(<strong key={match.index} className="font-extrabold text-slate-900 bg-indigo-50/50 px-1 rounded">{match[1]}</strong>);
                 lastIndex = boldRegex.lastIndex;
             }
-            if (lastIndex < processedLine.length) {
-                parts.push(processedLine.substring(lastIndex));
-            }
+            if (lastIndex < processedLine.length) parts.push(processedLine.substring(lastIndex));
 
-            return (
-                <p key={idx} className={className}>
-                    {parts.length > 0 ? parts : processedLine}
-                </p>
-            );
+            return <p key={idx} className={className}>{parts.length > 0 ? parts : processedLine}</p>;
         });
     };
 
@@ -1072,25 +963,53 @@ export default function App() {
         setIsFetchingHistory(false);
     };
 
-    // --- PANTALLA PRINCIPAL ---
+    // --- PANTALLA DE INICIO DE SESIÓN / REGISTRO ---
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
+                <div className="absolute top-4 right-4 flex gap-2">
+                    <button onClick={() => setLang('es')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'es' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ESP 🇪🇸</button>
+                    <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'en' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ENG 🇬🇧</button>
+                </div>
+
+                <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-100 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
+                    <div className="text-center mb-8">
+                        <div className="bg-slate-900 p-3 rounded-2xl shadow-lg inline-block mb-4"><Activity className="w-8 h-8 text-blue-400" /></div>
+                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">DikyStar<span className="text-blue-600"> {t.title}</span></h1>
+                        <p className="text-sm text-slate-500 mt-2 font-medium">{t.slogan}</p>
+                    </div>
+
+                    {authError && <div className="mb-4 p-3 bg-red-50 text-red-600 border border-red-100 rounded-xl text-sm font-bold text-center">{authError}</div>}
+
+                    <form onSubmit={handleAuth} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">{t.email}</label>
+                            <InputField type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="tu@correo.com" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">{t.password}</label>
+                            <InputField type="password" required minLength="6" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" />
+                        </div>
+                        <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-md transition-all">
+                            {authMode === 'login' ? <><LogIn className="w-5 h-5"/> {t.enter}</> : <><UserPlus className="w-5 h-5"/> {t.register}</>}
+                        </button>
+                    </form>
+
+                    <div className="mt-6 text-center">
+                        <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }} className="text-sm text-slate-500 hover:text-blue-600 font-bold transition-colors">
+                            {authMode === 'login' ? t.noAccount : t.haveAccount}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // --- PANTALLA PRINCIPAL (DASHBOARD) ---
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
             <div className="max-w-6xl mx-auto space-y-6">
-                
-                {/* Banner de Aviso: Modo Local (Si Firebase no está configurado) */}
-                {(!isFirebaseConfigured || isCanvasSandbox) && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-amber-100 p-2 rounded-xl text-amber-700">
-                                <ShieldAlert className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h4 className="font-extrabold text-amber-900 text-sm">{t.localModeTitle}</h4>
-                                <p className="text-xs text-amber-700 font-medium">{t.localModeDesc}</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 <header className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
@@ -1101,11 +1020,7 @@ export default function App() {
                                 <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 mt-1">
                                     {syncStatus === 'syncing' ? <Loader2 className="w-4 h-4 animate-spin text-blue-500" /> : <Cloud className="w-4 h-4 text-emerald-500" />}
                                     <span>
-                                        {(!isFirebaseConfigured || isCanvasSandbox)
-                                            ? t.savingLocal 
-                                            : syncStatus === 'syncing' 
-                                                ? t.savingCloud 
-                                                : user ? `${user.email}` : 'Sincronizado'}
+                                        {syncStatus === 'syncing' ? t.savingCloud : user ? `${user.email}` : 'Sincronizado'}
                                     </span>
                                     <span className="mx-1 hidden md:inline">•</span>
                                     <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg">
@@ -1114,11 +1029,9 @@ export default function App() {
                                             <option value="USD">USD</option><option value="EUR">EUR</option><option value="BRL">BRL</option><option value="ARS">ARS</option>
                                         </select>
                                     </div>
-                                    {isFirebaseConfigured && user && !isCanvasSandbox && (
-                                        <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 flex items-center gap-1 font-bold ml-2 bg-red-50 px-2 py-1 rounded-lg transition-colors">
-                                            <LogOut className="w-3.5 h-3.5" /> {t.logout}
-                                        </button>
-                                    )}
+                                    <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 flex items-center gap-1 font-bold ml-2 bg-red-50 px-2 py-1 rounded-lg transition-colors">
+                                        <LogOut className="w-3.5 h-3.5" /> {t.logout}
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1284,7 +1197,7 @@ export default function App() {
                                                                 {account.assets.map(asset => {
                                                                     const currentUSD = getAssetValueUSD(asset);
                                                                     const totalAmt = getAssetTotalAmount(asset);
-                                                                    const isFiat = asset.assetType === 'fiat';
+                                                                    const isFiat = asset.assetType === 'fiat' || asset.assetType === 'manual';
                                                                     const yieldAmt = getAssetYieldAmount(asset);
 
                                                                     return (
@@ -1292,9 +1205,7 @@ export default function App() {
                                                                             <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setSelectedAsset({ portfolioId: port.id, accountId: account.id, assetId: asset.id })}>
                                                                                 <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center font-bold text-white text-xs shadow-sm">{asset.symbol.substring(0, 4)}</div>
                                                                                 <div>
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <p className="font-bold text-slate-900 uppercase group-hover:text-blue-600 transition-colors">{asset.symbol}</p>
-                                                                                    </div>
+                                                                                    <div className="flex items-center gap-2"><p className="font-bold text-slate-900 uppercase group-hover:text-blue-600 transition-colors">{asset.symbol}</p></div>
                                                                                     <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                                                                                         {totalHidden ? '***' : (isFiat ? totalAmt.toFixed(2) : totalAmt.toFixed(4))} {isFiat ? '' : t.assetsUnits}
                                                                                         {yieldAmt > 0 && !totalHidden && <span className="text-green-600 font-bold ml-1">(+{isFiat ? yieldAmt.toFixed(2) : yieldAmt.toFixed(4)} APY)</span>}
@@ -1326,19 +1237,19 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* MODAL DEL ASESOR DE INTELIGENCIA ARTIFICIAL */}
+                {/* MODAL DEL ASESOR DE INTELIGENCIA ARTIFICIAL (DIKYSTAR AI ADVISOR) INTERACTIVO */}
                 {isAiModalOpen && (
                     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans animate-fade-in">
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col border border-slate-100">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col border border-slate-100 relative">
                             
-                            <div className="p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex justify-between items-center relative">
+                            <div className="p-4 md:p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex justify-between items-center shrink-0">
                                 <div className="flex items-center gap-3">
-                                    <div className="bg-violet-600/30 p-2.5 rounded-2xl border border-violet-500/30">
-                                        <Sparkles className="w-7 h-7 text-yellow-300 animate-pulse" />
+                                    <div className="bg-violet-600/30 p-2 md:p-2.5 rounded-2xl border border-violet-500/30">
+                                        <Sparkles className="w-6 h-6 md:w-7 md:h-7 text-yellow-300 animate-pulse" />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-extrabold tracking-tight">{t.aiTitle}</h3>
-                                        <p className="text-xs text-indigo-200 font-medium">Gemini 2.5 Flash</p>
+                                        <h3 className="text-lg md:text-xl font-extrabold tracking-tight">{t.aiTitle}</h3>
+                                        <p className="text-[10px] md:text-xs text-indigo-200 font-medium">Gemini 2.5 Flash Search Grounding</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setIsAiModalOpen(false)} className="text-slate-300 hover:text-white bg-white/10 hover:bg-white/25 px-4 py-2 rounded-xl transition-all font-bold text-sm">
@@ -1346,80 +1257,108 @@ export default function App() {
                                 </button>
                             </div>
 
-                            <div className="flex border-b border-slate-100 bg-slate-50 overflow-x-auto scrollbar-hide">
-                                <button onClick={() => setAiTab('analysis')} className={`flex-1 py-3 px-4 font-bold text-sm whitespace-nowrap border-b-2 transition-all flex items-center justify-center gap-1.5 ${aiTab === 'analysis' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-                                    <Sparkles className="w-4 h-4" /> {t.aiTabAnalysis}
-                                </button>
-                                <button onClick={() => setAiTab('news')} className={`flex-1 py-3 px-4 font-bold text-sm whitespace-nowrap border-b-2 transition-all flex items-center justify-center gap-1.5 ${aiTab === 'news' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-                                    <Newspaper className="w-4 h-4" /> {t.aiTabNews}
-                                </button>
-                                <button onClick={() => setAiTab('calendar')} className={`flex-1 py-3 px-4 font-bold text-sm whitespace-nowrap border-b-2 transition-all flex items-center justify-center gap-1.5 ${aiTab === 'calendar' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-                                    <Calendar className="w-4 h-4" /> {t.aiTabCalendar}
-                                </button>
-                                <button onClick={() => setAiTab('quotes')} className={`flex-1 py-3 px-4 font-bold text-sm whitespace-nowrap border-b-2 transition-all flex items-center justify-center gap-1.5 ${aiTab === 'quotes' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-                                    <DollarIcon className="w-4 h-4" /> {t.aiTabQuotes}
-                                </button>
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/50 flex flex-col gap-6">
-                                
-                                {aiTab === 'analysis' && (
-                                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-wider">{t.aiProfileLabel}</label>
-                                            <div className="flex gap-2 mt-1">
-                                                {['conservative', 'moderate', 'aggressive'].map(profile => (
-                                                    <button 
-                                                        key={profile} 
-                                                        onClick={() => setInvestorProfile(profile)} 
-                                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${investorProfile === profile ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                                                    >
-                                                        {profile === 'conservative' ? t.aiProfileCons : profile === 'moderate' ? t.aiProfileMod : t.aiProfileAgg}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <button 
-                                            onClick={() => handleRunAiAnalysis()} 
-                                            disabled={aiLoading}
-                                            className="w-full sm:w-auto px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-colors"
-                                        >
-                                            <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} />
-                                            {t.aiAnalyzeBtn}
-                                        </button>
-                                    </div>
-                                )}
-
-                                <div className="bg-white rounded-2xl border border-slate-200/80 p-6 md:p-8 shadow-sm flex-1 min-h-[350px] relative overflow-hidden">
-                                    {aiLoading ? (
-                                        <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center gap-4 z-20">
-                                            <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
-                                            <p className="text-sm font-bold text-slate-600 animate-pulse">{t.aiLoadingText}</p>
-                                        </div>
-                                    ) : null}
-
-                                    {aiError && (
-                                        <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-xl text-sm font-bold text-center mb-4">
-                                            {aiError}
-                                        </div>
-                                    )}
-
-                                    <div className="prose max-w-none text-slate-800">
-                                        {aiResponse ? (
-                                            <div className="space-y-1 animate-fade-in-up">
-                                                {renderFormattedAiText(aiResponse)}
-                                            </div>
-                                        ) : (
-                                            !aiLoading && (
-                                                <div className="h-full flex flex-col items-center justify-center text-center p-12 text-slate-400 gap-3">
-                                                    <Sparkles className="w-12 h-12 text-slate-300" />
-                                                    <p className="text-sm font-bold">Presiona el botón de arriba para iniciar el análisis en vivo.</p>
-                                                </div>
-                                            )
-                                        )}
+                            {/* Controles de Configuración de Perfil */}
+                            <div className="bg-white px-4 md:px-6 py-3 border-b border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider hidden sm:block">{t.aiProfileLabel}</label>
+                                    <div className="flex gap-2">
+                                        {['conservative', 'moderate', 'aggressive'].map(profile => (
+                                            <button 
+                                                key={profile} 
+                                                onClick={() => setInvestorProfile(profile)} 
+                                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${investorProfile === profile ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                            >
+                                                {profile === 'conservative' ? t.aiProfileCons : profile === 'moderate' ? t.aiProfileMod : t.aiProfileAgg}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Cuerpo del Chat IA */}
+                            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 flex flex-col gap-4">
+                                {aiMessages.length === 0 && (
+                                    <div className="h-full flex flex-col items-center justify-center text-center p-4 md:p-12 text-slate-400 gap-6">
+                                        <div className="bg-indigo-100 p-4 rounded-full">
+                                            <Sparkles className="w-12 h-12 text-indigo-500" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-lg font-bold text-slate-700 mb-2">Asistente Inteligente Listo</h4>
+                                            <p className="text-sm">Pregúntame sobre tus inversiones o elige una de las opciones rápidas abajo para comenzar a analizar tus activos con datos y cotizaciones en vivo.</p>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg mt-4">
+                                            <button onClick={() => handleSendAiMessage(null, `Genera un análisis completo de mi cartera con perfil ${investorProfile} y mi patrimonio de $${globalStats.current.toFixed(2)} USD.`)} className="p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 hover:text-indigo-600 font-bold text-sm shadow-sm transition-all text-slate-600 flex items-center justify-center gap-2"><PieChartIcon className="w-4 h-4"/> {t.aiQuickAnalysis}</button>
+                                            <button onClick={() => handleSendAiMessage(null, "Dame un resumen muy conciso de las 5 noticias financieras y macroeconómicas más importantes de hoy en el mundo, Estados Unidos y Argentina.")} className="p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 hover:text-indigo-600 font-bold text-sm shadow-sm transition-all text-slate-600 flex items-center justify-center gap-2"><Newspaper className="w-4 h-4"/> {t.aiQuickNews}</button>
+                                            <button onClick={() => handleSendAiMessage(null, "Escribe el calendario económico con eventos clave de esta semana en los mercados mundiales indicando su nivel de impacto.")} className="p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 hover:text-indigo-600 font-bold text-sm shadow-sm transition-all text-slate-600 flex items-center justify-center gap-2"><Calendar className="w-4 h-4"/> {t.aiQuickCalendar}</button>
+                                            <button onClick={() => handleSendAiMessage(null, "Escribe una tabla en markdown con las cotizaciones exactas a HOY del S&P500, Nasdaq, Merval Argentina, Bovespa, Bitcoin, Dólar Blue y Dólar CCL.")} className="p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 hover:text-indigo-600 font-bold text-sm shadow-sm transition-all text-slate-600 flex items-center justify-center gap-2"><DollarIcon className="w-4 h-4"/> {t.aiQuickMarkets}</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {aiMessages.map((msg, index) => (
+                                    <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full animate-fade-in-up`}>
+                                        <div className={`flex gap-3 max-w-[90%] md:max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-blue-600' : 'bg-slate-900'}`}>
+                                                {msg.role === 'user' ? <User className="w-5 h-5 text-white" /> : <Sparkles className="w-4 h-4 text-yellow-300" />}
+                                            </div>
+                                            <div className={`p-4 rounded-2xl ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none shadow-md' : 'bg-white border border-slate-200 shadow-sm rounded-tl-none prose max-w-none text-slate-800'}`}>
+                                                {msg.role === 'user' ? (
+                                                    <p className="text-sm font-medium">{msg.text}</p>
+                                                ) : (
+                                                    renderFormattedAiText(msg.text)
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {aiLoading && (
+                                    <div className="flex justify-start w-full animate-fade-in-up">
+                                        <div className="flex gap-3 max-w-[85%]">
+                                            <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center shrink-0 shadow-sm">
+                                                <Loader2 className="w-4 h-4 text-white animate-spin" />
+                                            </div>
+                                            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm rounded-tl-none flex items-center gap-2 text-slate-500">
+                                                <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
+                                                <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce delay-75"></span>
+                                                <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce delay-150"></span>
+                                                <span className="text-sm font-bold ml-2">{t.aiLoadingText}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {aiError && (
+                                    <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-xl text-sm font-bold text-center">
+                                        {aiError}
+                                    </div>
+                                )}
+                                
+                                <div ref={chatEndRef} />
+                            </div>
+
+                            {/* Input Chat Inferior */}
+                            <div className="p-4 bg-white border-t border-slate-200 shrink-0">
+                                <form onSubmit={handleSendAiMessage} className="flex gap-2 relative max-w-3xl mx-auto">
+                                    <input 
+                                        type="text" 
+                                        value={aiInput}
+                                        onChange={(e) => setAiInput(e.target.value)}
+                                        disabled={aiLoading}
+                                        placeholder={t.aiChatPlaceholder}
+                                        className="w-full pl-5 pr-14 py-4 bg-slate-100 border-none rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 text-sm shadow-inner transition-all disabled:opacity-50"
+                                        style={{ colorScheme: 'light' }}
+                                    />
+                                    <button 
+                                        type="submit" 
+                                        disabled={!aiInput.trim() || aiLoading}
+                                        className="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-50 shadow-md"
+                                    >
+                                        {aiLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-1" />}
+                                    </button>
+                                </form>
+                            </div>
+
                         </div>
                     </div>
                 )}

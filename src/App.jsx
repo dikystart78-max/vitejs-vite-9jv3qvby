@@ -9,7 +9,7 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, AreaChart, Area, XAxis, YAxis } from 'recharts';
 
 // --- CONFIGURACIÓN ESTRICTA DE BASE DE DATOS Y USUARIOS (FIREBASE) ---
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
@@ -23,8 +23,8 @@ const FIREBASE_CONFIG = {
     appId: "1:273717181133:web:e4a98b67474e1d84aec784"
 };
 
-// Inicialización blindada
-const app = initializeApp(FIREBASE_CONFIG);
+// Inicialización blindada que previene duplicados y asegura el uso de tus credenciales
+const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -90,7 +90,10 @@ const TRANSLATIONS = {
         aiQuickAnalysis: "Analizar mi Cartera",
         aiQuickNews: "Noticias de Hoy",
         aiQuickCalendar: "Calendario Económico",
-        aiQuickMarkets: "Resumen de Mercados"
+        aiQuickMarkets: "Resumen de Mercados",
+        assetsUnits: "unidades",
+        tradingViewUrl: "https://es.tradingview.com/markets/",
+        aiSystemPrompt: "Eres DikyStar AI, un asesor financiero de élite. Ofrece análisis detallado que incluye análisis fundamental, técnico, identificación de patrones de precios y sugerencias de inversión basadas en el perfil de riesgo del inversor, condiciones macroeconómicas y cotizaciones en tiempo real."
     },
     en: {
         title: "investment",
@@ -152,7 +155,10 @@ const TRANSLATIONS = {
         aiQuickAnalysis: "Analyze my Portfolio",
         aiQuickNews: "Today's News",
         aiQuickCalendar: "Economic Calendar",
-        aiQuickMarkets: "Market Summary"
+        aiQuickMarkets: "Market Summary",
+        assetsUnits: "units",
+        tradingViewUrl: "https://es.tradingview.com/markets/",
+        aiSystemPrompt: "You are DikyStar AI, an elite financial advisor. Provide detailed analysis including fundamental analysis, technical analysis, price pattern identification, and investment suggestions based on investor risk profile, macroeconomic conditions, and real-time market quotes."
     }
 };
 
@@ -207,7 +213,6 @@ const fetchHistoricalData = async (symbol, assetType, tfLabel) => {
             if (data && Array.isArray(data)) data.forEach(k => dataPoints.push({ ts: parseInt(k[0]), price: parseFloat(k[4]) }));
         } else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
             let ticker = sym;
-            // Sufijos automáticos para APIs de Yahoo Finance
             if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType) && !ticker.endsWith('.BA')) {
                 ticker = `${ticker}.BA`;
             } else if (assetType === 'stock_br' && !ticker.endsWith('.SA')) {
@@ -511,7 +516,7 @@ export default function App() {
         const fetchData = async () => {
             try {
                 setSyncStatus('syncing');
-                // Ruta de colecciones 100% sana y segura
+                // Ruta limpia, garantizada por las reglas de Firestore sin utilizar appId dinámicas conflictivas
                 const docRef = doc(db, 'artifacts', 'dikystar-app', 'users', user.uid, 'user_data', 'portfolios');
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists() && docSnap.data().portfolios) {
@@ -628,31 +633,6 @@ export default function App() {
         }
     };
 
-    // --- CÁLCULO DE ESTADÍSTICAS GLOBALES ---
-    const globalStats = portfolios.reduce((acc, port) => {
-        if (activePortfolioId !== 'all' && port.id !== activePortfolioId) return acc;
-        port.accounts.forEach(a => a.assets.forEach(as => { acc.current += getAssetValueUSD(as); acc.invested += getAssetInvestedUSD(as); }));
-        return acc;
-    }, { current: 0, invested: 0 });
-
-    const getPieChartData = () => {
-        const data = {};
-        portfolios.forEach(port => {
-            if (activePortfolioId !== 'all' && port.id !== activePortfolioId) return;
-            port.accounts.forEach(acc => acc.assets.forEach(asset => {
-                const value = getAssetValueUSD(asset) * getDisplayRate();
-                let cat = t.other;
-                if (['crypto', 'tokenized_stock'].includes(asset.assetType)) cat = getCryptoCategory(asset.symbol);
-                else if (['USDT','USDC','DAI','FDUSD'].includes(asset.symbol.toUpperCase())) cat = t.stablecoins;
-                else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar', 'fci_ar'].includes(asset.assetType)) cat = 'Acciones/Bonos/Fondos';
-                else if (asset.assetType === 'fiat') cat = 'Efectivo/Bancos';
-                else if (['manual', 'caucion_ar'].includes(asset.assetType)) cat = 'Renta Fija / Manual';
-                data[cat] = (data[cat] || 0) + value;
-            }));
-        });
-        return Object.keys(data).map(key => ({ name: key, value: data[key] })).filter(i => i.value > 0);
-    };
-
     const updateAllPrices = async () => {
         setIsLoadingPrices(true);
         let nP = { ...marketPrices }, nR = { ...forexRates };
@@ -695,14 +675,12 @@ export default function App() {
         const userText = quickPrompt || aiInput;
         if (!userText.trim()) return;
 
-        // Añadimos el mensaje del usuario al chat
         const newMessages = [...aiMessages, { role: 'user', text: userText, isQuick: !!quickPrompt }];
         setAiMessages(newMessages);
         setAiInput('');
         setAiLoading(true);
         setAiError('');
 
-        // Recopilamos el CONTEXTO EXACTO Y EN VIVO DE TU APLICACIÓN para la IA
         const simplifiedPortfolio = portfolios.map(p => ({
             cartera: p.name,
             activos: p.accounts.flatMap(a => a.assets.map(as => ({
@@ -731,13 +709,11 @@ export default function App() {
         4. Escribe tus respuestas usando formato Markdown para que sean legibles (usa negritas, listas y subtítulos).
         `;
 
-        // Preparamos el payload con historial de chat
         const chatHistory = newMessages.filter(m => !m.isQuick).map(m => ({
             role: m.role === 'user' ? 'user' : 'model',
             parts: [{ text: m.text }]
         }));
 
-        // Si es una acción rápida, simplemente enviamos el prompt como instrucción actual
         if (!!quickPrompt) {
             chatHistory.push({ role: 'user', parts: [{ text: quickPrompt }] });
         }
@@ -745,7 +721,7 @@ export default function App() {
         const payload = {
             contents: chatHistory,
             systemInstruction: { parts: [{ text: systemPrompt }] },
-            tools: [{ "google_search": {} }] // Grounding Activo para Google
+            tools: [{ "google_search": {} }] 
         };
 
         const apiKey = ""; 
@@ -819,6 +795,63 @@ export default function App() {
 
             return <p key={idx} className={className}>{parts.length > 0 ? parts : processedLine}</p>;
         });
+    };
+
+    const loadGlobalChart = async () => {
+        if (portfolios.length === 0) return;
+        setIsGlobalChartLoading(true);
+        let allAssets = [];
+        portfolios.forEach(port => {
+            if (activePortfolioId === 'all' || port.id === activePortfolioId) {
+                port.accounts.forEach(acc => { acc.assets.forEach(asset => allAssets.push(asset)); });
+            }
+        });
+
+        const uniqueAssetsMap = {};
+        allAssets.forEach(a => {
+            if (!['manual', 'caucion_ar', 'fci_ar'].includes(a.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(a.symbol.toUpperCase())) {
+                uniqueAssetsMap[a.symbol.toUpperCase()] = a.assetType;
+            }
+        });
+
+        const historyMap = {}; 
+        for (const sym of Object.keys(uniqueAssetsMap)) historyMap[sym] = await fetchHistoricalData(sym, uniqueAssetsMap[sym], globalChartTimeframe);
+
+        const allTimestampsSet = new Set();
+        Object.values(historyMap).forEach(arr => arr.forEach(point => allTimestampsSet.add(point.ts)));
+        const sortedTs = Array.from(allTimestampsSet).sort((a,b) => a - b);
+
+        const aggregatedData = [];
+        const lastKnownPrices = {}; 
+
+        sortedTs.forEach(ts => {
+            Object.keys(historyMap).forEach(sym => {
+                const point = historyMap[sym].find(p => p.ts === ts);
+                if (point) lastKnownPrices[sym] = point.price;
+            });
+            let totalUSD = 0;
+            allAssets.forEach(asset => {
+                const sym = asset.symbol.toUpperCase();
+                const amt = parseFloat(asset.amount || 0) + (asset.apy ? (parseFloat(asset.amount) * (parseFloat(asset.apy)/100) * ((Date.now() - new Date(asset.apyStartDate).getTime())/(1000*60*60*24*365))) : 0);
+                
+                if (['USD', 'USDT', 'USDC', 'DAI'].includes(sym)) totalUSD += amt;
+                else if (sym === 'ARS') totalUSD += amt / (forexRates.ARS || 1000);
+                else if (sym === 'EUR') totalUSD += amt / (forexRates.EUR || 0.92);
+                else if (sym === 'BRL') totalUSD += amt / (forexRates.BRL || 5.15);
+                else if (['manual', 'caucion_ar'].includes(asset.assetType)) totalUSD += amt;
+                else if (lastKnownPrices[sym]) {
+                    let historicalPrice = lastKnownPrices[sym];
+                    if (['accion_ar', 'bono_ar', 'cedear_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) historicalPrice = historicalPrice / (forexRates.ARS || 1000);
+                    totalUSD += amt * historicalPrice;
+                } else if (asset.purchasePrice) totalUSD += amt * parseFloat(asset.purchasePrice);
+            });
+            aggregatedData.push({
+                date: new Date(ts).toLocaleDateString('es-AR', { month: 'short', day: 'numeric', hour: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined, minute: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined }),
+                price: totalUSD * (displayCurrency === 'USD' ? 1 : (forexRates[displayCurrency] || 1))
+            });
+        });
+        setGlobalChartData(aggregatedData);
+        setIsGlobalChartLoading(false);
     };
 
     // --- ACCIONES DE CARTERA ---
@@ -966,7 +999,7 @@ export default function App() {
     // --- PANTALLA DE INICIO DE SESIÓN / REGISTRO ---
     if (!user) {
         return (
-            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans animate-fade-in">
                 <div className="absolute top-4 right-4 flex gap-2">
                     <button onClick={() => setLang('es')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'es' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ESP 🇪🇸</button>
                     <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'en' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ENG 🇬🇧</button>
@@ -1011,7 +1044,7 @@ export default function App() {
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
             <div className="max-w-6xl mx-auto space-y-6">
 
-                <header className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
+                <header className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200 animate-fade-in">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                         <div className="flex items-center gap-4">
                             <div className="bg-slate-900 p-3 rounded-xl shadow-lg"><Activity className="w-8 h-8 text-blue-400" /></div>
@@ -1025,7 +1058,7 @@ export default function App() {
                                     <span className="mx-1 hidden md:inline">•</span>
                                     <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg">
                                         <Settings className="w-3.5 h-3.5" />
-                                        <select value={displayCurrency} onChange={(e) => setDisplayCurrency(e.target.value)} className="bg-transparent font-bold cursor-pointer outline-none text-slate-700" style={{ colorScheme: 'light' }}>
+                                        <select value={displayCurrency} onChange={(e) => setDisplayCurrency(e.target.value)} className="bg-transparent font-bold cursor-pointer outline-none text-slate-700 animate-none" style={{ colorScheme: 'light' }}>
                                             <option value="USD">USD</option><option value="EUR">EUR</option><option value="BRL">BRL</option><option value="ARS">ARS</option>
                                         </select>
                                     </div>
@@ -1049,7 +1082,7 @@ export default function App() {
                             </button>
 
                             {/* BOTÓN TRADINGVIEW PROFESIONAL */}
-                            <a href="https://es.tradingview.com/markets/" target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-md">
+                            <a href={t.tradingViewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-md">
                                 <ExternalLink className="w-5 h-5 text-blue-400" /> <span className="hidden sm:inline">{t.tradingView}</span>
                             </a>
                             
@@ -1268,7 +1301,7 @@ export default function App() {
                                                 onClick={() => setInvestorProfile(profile)} 
                                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${investorProfile === profile ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                                             >
-                                                {profile === 'conservative' ? t.aiProfileCons : profile === 'moderate' ? t.aiProfileMod : t.aiProfileAgg}
+                                                {profile === 'conservative' ? t.aiProfileCons : profile === 'moderate' ? t.aiProfileMod : profile === 'aggressive' ? t.aiProfileAgg : profile}
                                             </button>
                                         ))}
                                     </div>
@@ -1401,7 +1434,7 @@ export default function App() {
                             <form onSubmit={handleAddAsset} className="p-6 space-y-4">
                                 <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.type}</label><SelectField value={newAsset.assetType} onChange={(e) => setNewAsset({...newAsset, assetType: e.target.value})}>
                                     {isArBroker ? (
-                                        <><option value="cedear_ar">CEDEAR / ETF Argentino</option><option value="accion_ar">Acción Local (Merval)</option><option value="bono_ar">Bono</option><option value="on_ar">ON</option><option value="letra_ar">Letra / T-Bill</option><option value="fci_ar">Fondo FCI</option><option value="caucion_ar">Caución AR$</option><option value="fiat">Saldos Liquidos</option></>
+                                        <><option value="cedear_ar">CEDEAR / ETF Argentino</option><option value="accion_ar">Acción Local (Merval)</option><option value="bono_ar">Bono Argentino</option><option value="on_ar">Obligación Negociable (ON)</option><option value="letra_ar">Letra del Tesoro</option><option value="caucion_ar">Caución AR$</option><option value="fci_ar">Fondo Común de Inversión (FCI)</option><option value="fiat">Saldos Liquidos</option></>
                                     ) : isBrBroker ? (
                                         <><option value="stock_br">Acción/FCI Brasil (.SA)</option><option value="fiat">Saldos Liquidos</option></>
                                     ) : (

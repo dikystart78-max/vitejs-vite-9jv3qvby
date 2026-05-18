@@ -10,11 +10,10 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, L
 
 // --- CONFIGURACIÓN ESTRICTA DE BASE DE DATOS Y USUARIOS (FIREBASE) ---
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
-// Credenciales oficiales de tu proyecto Firebase 'dikystar-investment'
-// CORREGIDO: Se cambia 'ZwPkkk' por la clave real 'ZwPKkk' (sensible a mayúsculas) extraída de tu captura de pantalla
+// Credenciales oficiales fijas de tu proyecto Firebase (Garantiza Sync en PC y Celular)
 const FIREBASE_CONFIG = {
     apiKey: "AIzaSyDJEA-eT-3vGiZwPKkk6ixn88i75qwp-vY",
     authDomain: "dikystar-investment.firebaseapp.com",
@@ -24,45 +23,25 @@ const FIREBASE_CONFIG = {
     appId: "1:273717181133:web:e4a98b67474e1d84aec784"
 };
 
-// Aislamiento estricto de entornos para evitar errores de API Key durante desarrollo en StackBlitz
-const isCanvasSandbox = typeof __initial_auth_token !== 'undefined' && __initial_auth_token;
-
-const getFirebaseConfig = () => {
-    if (isCanvasSandbox && typeof __firebase_config !== 'undefined' && __firebase_config) {
-        try { return JSON.parse(__firebase_config); } catch (e) {}
-    }
-    return FIREBASE_CONFIG;
-};
-
-const config = getFirebaseConfig();
-const isFirebaseConfigured = config && config.apiKey && config.apiKey !== "TU_API_KEY" && config.apiKey.startsWith("AIzaSy");
-let app, auth, db, appId;
-
-if (isFirebaseConfigured) {
-    try {
-        app = getApps().length === 0 ? initializeApp(config) : getApp();
-        auth = getAuth(app);
-        db = getFirestore(app);
-        const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'dikystar-main-app';
-        // Sanitizamos el appId eliminando barras diagonales para evitar errores de segmentos impares en la base de datos de Firebase
-        appId = rawAppId.replace(/\//g, '_');
-    } catch (e) {
-        console.error("Error inicializando Firebase:", e);
-    }
+// Inicialización ultra-segura para evitar fallos catastróficos de carga
+let app, auth, db, isFirebaseActive = false;
+try {
+    app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
+    isFirebaseActive = true;
+} catch (e) {
+    console.warn("Firebase no pudo inicializarse de forma nativa. Usando respaldo en local storage de alto rendimiento.", e);
 }
 
 // --- DICCIONARIO DE IDIOMAS (ESPAÑOL / INGLÉS) ---
 const TRANSLATIONS = {
     es: {
         title: "investment",
-        slogan: "Inicia sesión para sincronizar tus carteras",
-        email: "Correo Electrónico",
-        password: "Contraseña",
-        enter: "Entrar",
-        register: "Registrarme",
-        noAccount: "¿No tienes cuenta? Crea una gratis",
-        haveAccount: "¿Ya tienes cuenta? Inicia sesión",
-        savingCloud: "Sincronizando...",
+        localModeTitle: "Guardando en Local (Esta PC)",
+        localModeDesc: "Los datos se guardan en el navegador. Para sincronizar tu Laptop y Celular, presiona el botón Sincronizar Nube abajo.",
+        savingCloud: "Sincronizado en la Nube",
+        savingLocal: "Modo Local (Sin Nube)",
         totalWealth: "Patrimonio Total",
         tradingView: "Mercados TradingView",
         allPortfolios: "Todas las Carteras",
@@ -92,11 +71,7 @@ const TRANSLATIONS = {
         buy: "Compra / Depósito",
         sell: "Venta / Retiro",
         chart: "Gráfico",
-        errorWeakPassword: "La contraseña debe tener al menos 6 caracteres.",
-        errorEmailInUse: "Este correo electrónico ya está registrado.",
-        errorInvalidEmail: "El correo electrónico no es válido.",
-        errorCredentials: "Credenciales incorrectas o usuario no encontrado.",
-        logout: "Salir",
+        logout: "Desconectar",
         loading: "Cargando...",
         stablecoins: "Estables",
         bluechips: "Bluechips",
@@ -116,18 +91,19 @@ const TRANSLATIONS = {
         aiQuickMarkets: "Resumen de Mercados",
         assetsUnits: "unidades",
         tradingViewUrl: "https://es.tradingview.com/markets/",
-        aiSystemPrompt: "Eres DikyStar AI, un asesor financiero de élite. Ofrece análisis detallado que incluye análisis fundamental, técnico, identificación de patrones de precios y sugerencias de inversión basadas en el perfil de riesgo del inversor, condiciones macroeconómicas y cotizaciones en tiempo real de mercados."
+        aiSystemPrompt: "Eres DikyStar AI, un asesor financiero de élite. Ofrece análisis detallado que incluye análisis fundamental, técnico, identificación de patrones de precios y sugerencias de inversión basadas en el perfil de riesgo del inversor, condiciones macroeconómicas y cotizaciones en tiempo real de mercados.",
+        syncTitle: "Sincronizar Laptop y Celular",
+        syncDesc: "Ingresa el mismo código identificador en tu computadora y en tu iPhone para compartir exactamente las mismas carteras en tiempo real sin necesidad de contraseñas.",
+        syncBtn: "Establecer Canal de Sincronización",
+        syncStatusConnected: "Nube Conectada",
+        syncStatusDisconnected: "Memoria Local"
     },
     en: {
         title: "investment",
-        slogan: "Log in to synchronize your portfolios",
-        email: "Email Address",
-        password: "Password",
-        enter: "Sign In",
-        register: "Register",
-        noAccount: "Don't have an account? Sign up free",
-        haveAccount: "Already have an account? Log in",
-        savingCloud: "Syncing...",
+        localModeTitle: "Local Memory (This PC)",
+        localModeDesc: "Data is stored on your browser. To sync laptop and mobile, press the Cloud Sync button below.",
+        savingCloud: "Synced on Cloud",
+        savingLocal: "Local Mode (No Cloud)",
         totalWealth: "Total Wealth",
         tradingView: "TradingView Markets",
         allPortfolios: "All Portfolios",
@@ -157,11 +133,7 @@ const TRANSLATIONS = {
         buy: "Buy / Deposit",
         sell: "Sell / Withdraw",
         chart: "Chart",
-        errorWeakPassword: "Password must be at least 6 characters long.",
-        errorEmailInUse: "This email is already registered.",
-        errorInvalidEmail: "The email address is invalid.",
-        errorCredentials: "Wrong credentials or user not found.",
-        logout: "Logout",
+        logout: "Disconnect",
         loading: "Loading...",
         stablecoins: "Stables",
         bluechips: "Bluechips",
@@ -181,282 +153,81 @@ const TRANSLATIONS = {
         aiQuickMarkets: "Market Summary",
         assetsUnits: "units",
         tradingViewUrl: "https://es.tradingview.com/markets/",
-        aiSystemPrompt: "You are DikyStar AI, an elite financial advisor. Provide detailed analysis including fundamental analysis, technical analysis, price pattern identification, and investment suggestions based on investor risk profile, macroeconomic conditions, and real-time market quotes."
+        aiSystemPrompt: "You are DikyStar AI, an elite financial advisor. Provide detailed analysis including fundamental analysis, technical analysis, price pattern identification, and investment suggestions based on investor risk profile, macroeconomic conditions, and real-time market quotes.",
+        syncTitle: "Sync Laptop & Phone",
+        syncDesc: "Enter the same identifier code on both your computer and iPhone to share the exact same portfolios in real-time without passwords.",
+        syncBtn: "Set Sync Channel",
+        syncStatusConnected: "Cloud Connected",
+        syncStatusDisconnected: "Local Memory"
     }
 };
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e'];
-
-const TIMEFRAMES = [
-    { label: '1D', range: '1d', binanceInterval: '5m', binanceLimit: 288, yahooRange: '1d', yahooInterval: '5m' },
-    { label: '5D', range: '5d', binanceInterval: '15m', binanceLimit: 480, yahooRange: '5d', yahooInterval: '15m' },
-    { label: '1M', range: '1mo', binanceInterval: '1d', binanceLimit: 30, yahooRange: '1mo', yahooInterval: '1d' },
-    { label: '6M', range: '6mo', binanceInterval: '1d', binanceLimit: 180, yahooRange: '6mo', yahooInterval: '1d' },
-    { label: '1A', range: '1y', binanceInterval: '1w', binanceLimit: 52, yahooRange: '1y', yahooInterval: '1wk' },
-    { label: '5A', range: '5y', binanceInterval: '1M', binanceLimit: 60, yahooRange: '5y', yahooInterval: '1mo' },
-];
-
-const fetchWithFallbacks = async (url) => {
-    const proxies = [
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`
-    ];
-    for (let proxy of proxies) {
-        try {
-            const res = await fetch(proxy);
-            if (res.ok) {
-                if (proxy.includes('/get?url=')) {
-                    const data = await res.json();
-                    if (data && data.contents) {
-                        try { return JSON.parse(data.contents); } catch (e) { return data.contents; }
-                    }
-                } else return await res.json();
-            }
-        } catch (e) {}
-    }
-    return null;
+// --- PURE HELPER FUNCTIONS DEFINIDOS FUERA DEL COMPONENTE (EVITA TDZ Y RE-CREACIONES) ---
+const getCryptoCategory = (symbol, t) => {
+    const s = symbol.toUpperCase();
+    if (['USDT','USDC','DAI','FDUSD','TUSD'].includes(s)) return t.stablecoins;
+    if (['BTC','ETH'].includes(s)) return t.bluechips;
+    if (['SOL','ADA','DOT','AVAX','MATIC','LINK','ATOM'].includes(s)) return t.blockchains;
+    return t.altcoins;
 };
 
-const fetchHistoricalData = async (symbol, assetType, tfLabel) => {
-    const tf = TIMEFRAMES.find(t => t.label === tfLabel) || TIMEFRAMES[2];
-    const sym = symbol.toUpperCase();
-    const dataPoints = [];
-    try {
-        if (['crypto', 'tokenized_stock'].includes(assetType)) {
-            const url = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=${tf.binanceInterval}&limit=${tf.binanceLimit}`;
-            let data = null;
-            try {
-                const res = await fetch(url);
-                if (res.ok) data = await res.json();
-            } catch (e) {
-                const resProxy = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-                if (resProxy.ok) data = await resProxy.json();
-            }
-            if (data && Array.isArray(data)) data.forEach(k => dataPoints.push({ ts: parseInt(k[0]), price: parseFloat(k[4]) }));
-        } else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
-            let ticker = sym;
-            if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType) && !ticker.endsWith('.BA')) {
-                ticker = `${ticker}.BA`;
-            } else if (assetType === 'stock_br' && !ticker.endsWith('.SA')) {
-                ticker = `${ticker}.SA`;
-            }
+const getAssetYieldAmount = (asset) => {
+    if (!asset.apy || !asset.apyStartDate) return 0;
+    const start = new Date(asset.apyStartDate).getTime();
+    const days = (Date.now() - start) / (1000 * 60 * 60 * 24);
+    if (days <= 0) return 0;
+    return parseFloat(asset.amount) * (parseFloat(asset.apy) / 100) * (days / 365);
+};
 
-            const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=${tf.yahooRange}&interval=${tf.yahooInterval}`;
-            const data = await fetchWithFallbacks(url);
-            if (data && data?.chart?.result?.[0]) {
-                const result = data.chart.result[0];
-                const timestamps = result.timestamp || [];
-                const prices = result.indicators?.quote?.[0]?.close || [];
-                timestamps.forEach((ts, i) => { if (prices[i] !== null && prices[i] !== undefined) dataPoints.push({ ts: ts * 1000, price: prices[i] }); });
-            }
+const getAssetTotalAmount = (asset) => {
+    return parseFloat(asset.amount || 0) + getAssetYieldAmount(asset);
+};
+
+const getAssetValueUSD = (asset, marketPrices, forexRates) => {
+    const tVal = getAssetTotalAmount(asset);
+    if (['manual', 'caucion_ar'].includes(asset.assetType)) return tVal;
+    const s = asset.symbol.toUpperCase();
+    if (['USD', 'USDT', 'USDC', 'DAI'].includes(s)) return tVal;
+    if (s === 'ARS') return tVal / (forexRates.ARS || 1000);
+    if (s === 'EUR') return tVal / (forexRates.EUR || 0.92);
+    if (s === 'BRL') return tVal / (forexRates.BRL || 5.15);
+    return (marketPrices[s] ? tVal * marketPrices[s] : (asset.purchasePrice ? tVal * parseFloat(asset.purchasePrice) : 0));
+};
+
+const getAssetInvestedUSD = (asset, marketPrices, forexRates) => {
+    let amt = 0, cost = 0;
+    (asset.transactions || []).forEach(tx => {
+        if (tx.type === 'buy') {
+            amt += parseFloat(tx.amount || 0);
+            cost += parseFloat(tx.amount || 0) * parseFloat(tx.price || 0);
         }
-    } catch (e) {}
-    return dataPoints;
+    });
+    const avgPrice = amt > 0 ? cost / amt : parseFloat(asset.purchasePrice || 0);
+    return avgPrice > 0 ? getAssetTotalAmount(asset) * avgPrice : getAssetValueUSD(asset, marketPrices, forexRates); 
 };
 
-const InputField = (props) => (
-    <input 
-        {...props} 
-        className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none shadow-sm focus:border-blue-500 text-slate-900 bg-white ${props.className || ''}`}
-        style={{ backgroundColor: '#ffffff', color: '#0f172a', colorScheme: 'light', ...props.style }}
-    />
-);
+const getAccountIcon = (type) => {
+    switch(type) {
+        case 'crypto_exchange': return <Bitcoin className="w-5 h-5 text-orange-500" />;
+        case 'broker_global': return <Globe className="w-5 h-5 text-blue-500" />;
+        case 'broker_ar': return <TrendingUp className="w-5 h-5 text-indigo-500" />;
+        case 'broker_br': return <TrendingUp className="w-5 h-5 text-yellow-600" />;
+        case 'bank_us': return <Landmark className="w-5 h-5 text-emerald-500" />;
+        case 'bank_ar': return <Building2 className="w-5 h-5 text-cyan-500" />;
+        case 'bank_eu': return <Euro className="w-5 h-5 text-blue-600" />;
+        case 'bank_br': return <Building2 className="w-5 h-5 text-yellow-500" />;
+        case 'wallet': return <Wallet className="w-5 h-5 text-purple-500" />;
+        default: return <Wallet className="w-5 h-5 text-gray-500" />;
+    }
+};
 
-const SelectField = (props) => (
-    <select 
-        {...props} 
-        className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none bg-white shadow-sm focus:border-blue-500 text-slate-900 ${props.className || ''}`}
-        style={{ backgroundColor: '#ffffff', color: '#0f172a', colorScheme: 'light', ...props.style }}
-    >
-        {props.children}
-    </select>
-);
-
-
-const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang }) => {
-    const t = TRANSLATIONS[lang];
-    const [tab, setTab] = useState('info');
-    const [apy, setApy] = useState(asset.apy || '');
-    const [apyDate, setApyDate] = useState(asset.apyStartDate || new Date().toISOString().split('T')[0]);
-    
-    const [txType, setTxType] = useState('buy');
-    const [txAmount, setTxAmount] = useState('');
-    const [txPrice, setTxPrice] = useState(asset.purchasePrice || '');
-    const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
-
-    const [chartTimeframe, setChartTimeframe] = useState('1M');
-    const [chartData, setChartData] = useState([]);
-    const [isChartLoading, setIsChartLoading] = useState(false);
-
-    const isFiat = asset.assetType === 'fiat' || asset.assetType === 'manual';
-
-    const yieldAmount = React.useMemo(() => {
-        if (!asset.apy || parseFloat(asset.apy) <= 0 || !asset.apyStartDate) return 0;
-        const start = new Date(asset.apyStartDate).getTime();
-        const days = (Date.now() - start) / (1000 * 60 * 60 * 24);
-        if (days <= 0) return 0;
-        return parseFloat(asset.amount) * (parseFloat(asset.apy) / 100) * (days / 365);
-    }, [asset]);
-
-    useEffect(() => { if (tab === 'chart') loadChartData(); }, [tab, chartTimeframe]);
-
-    const loadChartData = async () => {
-        setIsChartLoading(true); setChartData([]);
-        const history = await fetchHistoricalData(asset.symbol, asset.assetType, chartTimeframe);
-        setChartData(history.map(item => ({
-            date: new Date(item.ts).toLocaleDateString('es-AR', { month: 'short', day: 'numeric', hour: ['1D', '5D'].includes(chartTimeframe) ? '2-digit' : undefined, minute: ['1D', '5D'].includes(chartTimeframe) ? '2-digit' : undefined }),
-            price: item.price
-        })));
-        setIsChartLoading(false);
-    };
-
-    const isChartPositive = chartData.length > 1 && chartData[chartData.length - 1].price >= chartData[0].price;
-    const chartColor = isChartPositive ? '#10b981' : '#ef4444';
-
-    return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
-                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                    <div>
-                        <h3 className="text-lg font-bold text-slate-900">{t.addAsset}: {asset.symbol}</h3>
-                        <p className="text-sm text-slate-500">{t.amount}: {(parseFloat(asset.amount) + yieldAmount).toFixed(isFiat ? 2 : 4)}</p>
-                    </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700 bg-slate-200 p-2 rounded-full transition-colors">{t.cancel}</button>
-                </div>
-                
-                <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
-                    <button onClick={() => setTab('info')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors ${tab === 'info' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>Resumen & APY</button>
-                    <button onClick={() => setTab('history')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors ${tab === 'history' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>{t.history}</button>
-                    {(!['manual', 'fiat', 'caucion_ar', 'fci_ar'].includes(asset.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(asset.symbol.toUpperCase())) && (
-                        <button onClick={() => setTab('chart')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${tab === 'chart' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}><LineChartIcon className="w-4 h-4"/> {t.chart}</button>
-                    )}
-                </div>
-
-                <div className="p-6 overflow-y-auto">
-                    {tab === 'info' && (
-                        <div className="space-y-6">
-                            <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex justify-between items-center">
-                                <div>
-                                    <p className="text-sm text-green-800 font-bold mb-1">{t.apyYield}</p>
-                                    <p className="text-3xl font-black text-green-600">+{yieldAmount.toFixed(isFiat ? 2 : 4)} <span className="text-lg">{asset.symbol}</span></p>
-                                </div>
-                                <Activity className="w-10 h-10 text-green-300" />
-                            </div>
-                            
-                            <div className="space-y-3">
-                                <h4 className="font-bold text-slate-800 flex items-center gap-2"><Settings className="w-4 h-4"/> Configuración APY</h4>
-                                <div className="flex gap-4">
-                                    <div className="flex-1">
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t.apyRate}</label>
-                                        <InputField type="number" step="any" min="0" value={apy} onChange={(e) => setApy(e.target.value)} placeholder="Ej: 12" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t.apyDate}</label>
-                                        <InputField type="date" value={apyDate} onChange={(e) => setApyDate(e.target.value)} />
-                                    </div>
-                                </div>
-                                <button onClick={() => onUpdateApy(apy, apyDate)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-sm">{t.save}</button>
-                            </div>
-                        </div>
-                    )}
-                    
-                    {tab === 'history' && (
-                        <div className="space-y-6">
-                            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-3">
-                                <h4 className="font-bold text-blue-900 text-sm flex items-center gap-2"><Plus className="w-4 h-4"/> {t.addActivity}</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <SelectField value={txType} onChange={(e) => setTxType(e.target.value)} className="py-2 text-sm">
-                                        <option value="buy">{t.buy}</option>
-                                        <option value="sell">{t.sell}</option>
-                                    </SelectField>
-                                    <InputField type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="py-2 text-sm" />
-                                    <InputField type="number" step="any" min="0" placeholder={t.amount} value={txAmount} onChange={(e) => setTxAmount(e.target.value)} className="py-2 text-sm" />
-                                    <InputField type="number" step="any" min="0" placeholder={t.purchasePrice} value={txPrice} onChange={(e) => setTxPrice(e.target.value)} className="py-2 text-sm" />
-                                </div>
-                                <button onClick={(e) => { e.preventDefault(); if(txAmount) onAddTransaction({ type: txType, amount: txAmount, price: txPrice, date: txDate }); setTxAmount(''); setTxPrice(''); }} className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors">{t.save}</button>
-                            </div>
-
-                            <div>
-                                <h4 className="font-bold text-slate-800 text-sm mb-3">{t.history}</h4>
-                                <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                    {!asset.transactions || asset.transactions.length === 0 ? (
-                                        <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-100 text-center">No hay actividad.</p>
-                                    ) : (
-                                        asset.transactions.map((tx, idx) => (
-                                            <div key={idx} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 border ${tx.type === 'buy' ? 'border-green-200 text-green-600' : 'border-red-200 text-red-600'}`}>
-                                                        {tx.type === 'buy' ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-800">{tx.type === 'buy' ? t.buy : t.sell}</p>
-                                                        <p className="text-xs text-slate-500">{tx.date}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className={`text-sm font-bold ${tx.type === 'buy' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'buy' ? '+' : '-'}{parseFloat(tx.amount).toFixed(isFiat ? 2 : 4)}</p>
-                                                    {parseFloat(tx.price) > 0 && <p className="text-xs text-slate-500">${parseFloat(tx.price).toFixed(2)} USD c/u</p>}
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {tab === 'chart' && (
-                        <div className="space-y-4">
-                            <div className="flex gap-2 bg-slate-100 p-1 rounded-lg overflow-x-auto">
-                                {TIMEFRAMES.map(tf => (
-                                    <button key={tf.label} onClick={() => setChartTimeframe(tf.label)} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${chartTimeframe === tf.label ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>
-                                        {tf.label}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 relative">
-                                {isChartLoading && <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}
-                                <div className="h-64">
-                                    {chartData.length > 0 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
-                                                <defs>
-                                                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/>
-                                                        <stop offset="95%" stopColor={chartColor} stopOpacity={0}/>
-                                                    </linearGradient>
-                                                </defs>
-                                                <XAxis dataKey="date" hide />
-                                                <YAxis domain={['auto', 'auto']} hide />
-                                                <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }} itemStyle={{ color: chartColor, fontWeight: '900', fontSize: '16px' }} formatter={(value) => [value.toFixed(2), 'Precio']} />
-                                                <Area type="monotone" dataKey="price" stroke={chartColor} strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    ) : (!isChartLoading && <div className="h-full flex items-center justify-center text-slate-400 text-sm">Sin datos suficientes.</div>)}
-                                </div>
-                                {chartData.length > 0 && (
-                                    <div className="mt-4 flex justify-between items-center px-2">
-                                        <div>
-                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Precio Actual</p>
-                                            <p className={`text-xl font-black ${isChartPositive ? 'text-green-600' : 'text-red-500'}`}>{chartData[chartData.length - 1].price.toFixed(2)}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Variación</p>
-                                            <p className={`text-sm font-bold flex items-center justify-end gap-1 ${isChartPositive ? 'text-green-600' : 'text-red-500'}`}>
-                                                {isChartPositive ? <ArrowUpRight className="w-4 h-4"/> : <ArrowDownRight className="w-4 h-4"/>}
-                                                {Math.abs(chartData[chartData.length - 1].price - chartData[0].price).toFixed(2)} 
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
+// Formatea un valor crudo que ya fue convertido a la divisa correspondiente
+const formatCurrencyRaw = (val, currency) => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 2
+    }).format(val);
 };
 
 export default function App() {
@@ -464,21 +235,18 @@ export default function App() {
     const [lang, setLang] = useState('es'); 
     const t = TRANSLATIONS[lang];
 
-    // --- ESTADOS DE AUTENTICACIÓN Y NUBE ---
-    const [user, setUser] = useState(null);
-    const [authLoading, setAuthLoading] = useState(true);
-    const [authMode, setAuthMode] = useState('login'); 
-    const [authEmail, setAuthEmail] = useState('');
-    const [authPassword, setAuthPassword] = useState('');
-    const [authError, setAuthError] = useState('');
-
-    // --- ESTADOS PRINCIPALES DE CARTERA ---
+    // --- ESTADOS DE CARTERA Y AJUSTES ---
     const [portfolios, setPortfolios] = useState([]);
     const [activePortfolioId, setActivePortfolioId] = useState('all');
-    
     const [marketPrices, setMarketPrices] = useState({});
     const [isLoadingPrices, setIsLoadingPrices] = useState(false);
-    const [syncStatus, setSyncStatus] = useState('synced');
+    
+    // --- ESTADOS DE SINCRONIZACIÓN AUTOMÁTICA ---
+    const [syncKey, setSyncKey] = useState(() => localStorage.getItem('DikyStarSyncKey') || 'dikystar-anon-user');
+    const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+    const [tempSyncKey, setTempSyncKey] = useState('');
+    const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'local'
+    const [cloudError, setCloudError] = useState(false);
 
     const [forexRates, setForexRates] = useState({ ARS: 1000, EUR: 0.92, BRL: 5.15 });
     const [displayCurrency, setDisplayCurrency] = useState('USD');
@@ -513,147 +281,45 @@ export default function App() {
     const [aiError, setAiError] = useState('');
     const chatEndRef = useRef(null);
 
-    // --- EFECTOS DE AUTENTICACIÓN ESTRICTA ---
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (u) => {
-            setUser(u);
-            setAuthLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+    // --- ESTADÍSTICAS GLOBALES CON MEMOIZACIÓN (GARANTIZA DEFINICIÓN INMEDIATA) ---
+    const globalStats = React.useMemo(() => {
+        return portfolios.reduce((acc, port) => {
+            if (activePortfolioId !== 'all' && port.id !== activePortfolioId) return acc;
+            port.accounts.forEach(account => {
+                account.assets.forEach(asset => {
+                    acc.current += getAssetValueUSD(asset, marketPrices, forexRates);
+                    acc.invested += getAssetInvestedUSD(asset, marketPrices, forexRates);
+                });
+            });
+            return acc;
+        }, { current: 0, invested: 0 });
+    }, [portfolios, activePortfolioId, marketPrices, forexRates]);
 
-    // --- CARGAR DATOS DESDE LOCAL STORAGE Y FIRESTORE ---
-    useEffect(() => {
-        const loadLocal = () => {
-            const local = localStorage.getItem('DikyStarPortfolios_v2');
-            if (local) {
-                try { setPortfolios(JSON.parse(local)); } catch (e) { console.error(e); }
-            }
-        };
-
-        if (!user) {
-            loadLocal();
-            return;
-        }
-
-        const fetchData = async () => {
-            try {
-                setSyncStatus('syncing');
-                // Ruta limpia, garantizada por las reglas de Firestore sin utilizar appId dinámicas conflictivas
-                const docRef = doc(db, 'artifacts', 'dikystar-app', 'users', user.uid, 'user_data', 'portfolios');
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists() && docSnap.data().portfolios) {
-                    setPortfolios(docSnap.data().portfolios);
-                } else {
-                    loadLocal();
-                }
-                setSyncStatus('synced');
-            } catch (e) { 
-                console.error("Error cargando de la nube", e);
-                loadLocal();
-            }
-        };
-        fetchData();
-    }, [user]);
-
-    // --- GUARDAR DATOS EN FIRESTORE Y LOCAL ---
-    useEffect(() => {
-        if (portfolios.length === 0) return;
-        
-        localStorage.setItem('DikyStarPortfolios_v2', JSON.stringify(portfolios));
-        updateAllPrices();
-
-        if (user) {
-            const saveData = async () => {
-                setSyncStatus('syncing');
-                try {
-                    const docRef = doc(db, 'artifacts', 'dikystar-app', 'users', user.uid, 'user_data', 'portfolios');
-                    await setDoc(docRef, { portfolios });
-                    setSyncStatus('synced');
-                } catch (e) { console.error("Error guardando en la nube", e); }
-            };
-            saveData();
-        }
-    }, [portfolios]);
-
-    useEffect(() => {
-        if (dashboardTab === 'evolution') {
-            loadGlobalChart();
-        }
-    }, [dashboardTab, globalChartTimeframe, activePortfolioId, user]);
-
-    useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [aiMessages]);
-
-    // --- FUNCIONES DE AUTENTICACIÓN ---
-    const handleAuth = async (e) => {
-        e.preventDefault();
-        setAuthError('');
-        try {
-            if (authMode === 'login') await signInWithEmailAndPassword(auth, authEmail, authPassword);
-            else await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-        } catch (err) {
-            if (err.code === 'auth/weak-password') setAuthError(t.errorWeakPassword);
-            else if (err.code === 'auth/email-already-in-use') setAuthError(t.errorEmailInUse);
-            else if (err.code === 'auth/invalid-email') setAuthError(t.errorInvalidEmail);
-            else if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(err.code)) setAuthError(t.errorCredentials);
-            else setAuthError(`Error: ${err.message}`);
-        }
-    };
-
-    const handleLogout = () => {
-        if (auth) signOut(auth);
-        setUser(null);
-        setPortfolios([]);
-        localStorage.removeItem('DikyStarPortfolios_v2');
-    };
-
-    // --- CÁLCULOS AUXILIARES GLOBALES Y PRECIOS ---
-    const getCryptoCategory = (symbol) => {
-        const s = symbol.toUpperCase();
-        if (['USDT','USDC','DAI','FDUSD','TUSD'].includes(s)) return t.stablecoins;
-        if (['BTC','ETH'].includes(s)) return t.bluechips;
-        if (['SOL','ADA','DOT','AVAX','MATIC','LINK','ATOM'].includes(s)) return t.blockchains;
-        return t.altcoins;
-    };
-
+    // Ratio de conversión de divisa actual
     const getDisplayRate = () => displayCurrency === 'USD' ? 1 : (forexRates[displayCurrency] || 1);
-    const formatCurrency = (val, cur = null) => new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || displayCurrency, minimumFractionDigits: 2 }).format(val * (cur === 'USD' ? 1 : getDisplayRate()));
-    const formatPercent = (p) => isNaN(p) || !isFinite(p) ? "0.00%" : `${p >= 0 ? '+' : ''}${p.toFixed(2)}%`;
-    const getAssetYieldAmount = (asset) => (!asset.apy || !asset.apyStartDate) ? 0 : Math.max(0, parseFloat(asset.amount) * (parseFloat(asset.apy) / 100) * ((Date.now() - new Date(asset.apyStartDate).getTime()) / (1000 * 60 * 60 * 24 * 365)));
-    const getAssetTotalAmount = (asset) => parseFloat(asset.amount || 0) + getAssetYieldAmount(asset);
-    
-    const getAssetValueUSD = (asset) => {
-        const tVal = getAssetTotalAmount(asset);
-        if (['manual', 'caucion_ar'].includes(asset.assetType)) return tVal;
-        const s = asset.symbol.toUpperCase();
-        if (['USD', 'USDT', 'USDC', 'DAI'].includes(s)) return tVal;
-        if (s === 'ARS') return tVal / forexRates.ARS;
-        if (s === 'EUR') return tVal / forexRates.EUR;
-        if (s === 'BRL') return tVal / forexRates.BRL;
-        return (marketPrices[s] ? tVal * marketPrices[s] : (asset.purchasePrice ? tVal * parseFloat(asset.purchasePrice) : 0));
+
+    // Formatea un valor en dólares estadounidenses convirtiéndolo automáticamente
+    const formatCurrency = (val, cur = null) => {
+        return formatCurrencyRaw(val * (cur === 'USD' ? 1 : getDisplayRate()), cur || displayCurrency);
     };
 
-    const getAssetInvestedUSD = (asset) => {
-        let amt = 0, cost = 0;
-        (asset.transactions || []).forEach(tx => { if (tx.type === 'buy') { amt += parseFloat(tx.amount || 0); cost += parseFloat(tx.amount || 0) * parseFloat(tx.price || 0); }});
-        return (amt > 0 ? cost / amt : parseFloat(asset.purchasePrice || 0)) > 0 ? getAssetTotalAmount(asset) * (amt > 0 ? cost / amt : parseFloat(asset.purchasePrice || 0)) : getAssetValueUSD(asset); 
-    };
-
-    const getAccountIcon = (type) => {
-        switch(type) {
-            case 'crypto_exchange': return <Bitcoin className="w-5 h-5 text-orange-500" />;
-            case 'broker_global': return <Globe className="w-5 h-5 text-blue-500" />;
-            case 'broker_ar': return <TrendingUp className="w-5 h-5 text-indigo-500" />;
-            case 'broker_br': return <TrendingUp className="w-5 h-5 text-yellow-600" />;
-            case 'bank_us': return <Landmark className="w-5 h-5 text-emerald-500" />;
-            case 'bank_ar': return <Building2 className="w-5 h-5 text-cyan-500" />;
-            case 'bank_eu': return <Euro className="w-5 h-5 text-blue-600" />;
-            case 'bank_br': return <Building2 className="w-5 h-5 text-yellow-500" />;
-            case 'wallet': return <Wallet className="w-5 h-5 text-purple-500" />;
-            default: return <Wallet className="w-5 h-5 text-gray-500" />;
-        }
+    // --- METODOS DE INTERFAZ Y DATOS ---
+    const getPieChartData = () => {
+        const data = {};
+        portfolios.forEach(port => {
+            if (activePortfolioId !== 'all' && port.id !== activePortfolioId) return;
+            port.accounts.forEach(acc => acc.assets.forEach(asset => {
+                const value = getAssetValueUSD(asset, marketPrices, forexRates) * getDisplayRate();
+                let cat = t.other;
+                if (['crypto', 'tokenized_stock'].includes(asset.assetType)) cat = getCryptoCategory(asset.symbol, t);
+                else if (['USDT','USDC','DAI','FDUSD'].includes(asset.symbol.toUpperCase())) cat = t.stablecoins;
+                else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar', 'fci_ar'].includes(asset.assetType)) cat = 'Acciones/Bonos/Fondos';
+                else if (asset.assetType === 'fiat') cat = 'Efectivo/Bancos';
+                else if (['manual', 'caucion_ar'].includes(asset.assetType)) cat = 'Renta Fija / Manual';
+                data[cat] = (data[cat] || 0) + value;
+            }));
+        });
+        return Object.keys(data).map(key => ({ name: key, value: data[key] })).filter(i => i.value > 0);
     };
 
     const updateAllPrices = async () => {
@@ -692,7 +358,205 @@ export default function App() {
         if (dashboardTab === 'evolution') loadGlobalChart();
     };
 
-    // --- NUEVO ASESOR DE IA ESPECIALIZADO (CHAT INTERACTIVO Y CONSCIENTE DEL CONTEXTO) ---
+    // --- CARGAR DATOS INICIALES ---
+    useEffect(() => {
+        const loadInitialData = async () => {
+            const local = localStorage.getItem('DikyStarPortfolios_v2');
+            if (local) {
+                try { setPortfolios(JSON.parse(local)); } catch (e) { console.error(e); }
+            }
+            
+            if (isFirebaseActive && syncKey) {
+                try {
+                    setSyncStatus('syncing');
+                    const docRef = doc(db, 'artifacts', 'dikystar-app', 'users', syncKey, 'user_data', 'portfolios');
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists() && docSnap.data().portfolios) {
+                        setPortfolios(docSnap.data().portfolios);
+                        setCloudError(false);
+                    }
+                    setSyncStatus('synced');
+                } catch (e) {
+                    console.warn("Fallo de conexión a la nube en init (Modo Local Seguro Activo)", e);
+                    setSyncStatus('local');
+                    setCloudError(true);
+                }
+            } else {
+                setSyncStatus('local');
+            }
+        };
+
+        loadInitialData();
+    }, [syncKey]);
+
+    // --- GUARDAR Y SINCRONIZAR CAMBIOS ---
+    useEffect(() => {
+        if (portfolios.length === 0) return;
+        
+        localStorage.setItem('DikyStarPortfolios_v2', JSON.stringify(portfolios));
+        updateAllPrices();
+
+        if (isFirebaseActive && syncKey) {
+            const saveDataToCloud = async () => {
+                setSyncStatus('syncing');
+                try {
+                    const docRef = doc(db, 'artifacts', 'dikystar-app', 'users', syncKey, 'user_data', 'portfolios');
+                    await setDoc(docRef, { portfolios });
+                    setSyncStatus('synced');
+                    setCloudError(false);
+                } catch (e) {
+                    console.warn("Fallo de conexión al guardar en la nube (Datos guardados localmente)", e);
+                    setSyncStatus('local');
+                    setCloudError(true);
+                }
+            };
+            saveDataToCloud();
+        }
+    }, [portfolios]);
+
+    // --- ACCIONES DE CARTERA ---
+    const handleAddPortfolio = (e) => {
+        e.preventDefault();
+        if (!newPortfolioName.trim()) return;
+        const newPort = { id: Date.now().toString(), name: newPortfolioName, accounts: [] };
+        setPortfolios([...portfolios, newPort]);
+        setNewPortfolioName('');
+        setIsAddingPortfolio(false);
+        setActivePortfolioId(newPort.id);
+    };
+
+    const handleAddAccount = (e) => {
+        e.preventDefault();
+        if (!newAccount.name.trim()) return;
+        const targetPortId = newAccount.portfolioId || (portfolios[0]?.id);
+        const account = { id: Date.now().toString(), name: newAccount.name, type: newAccount.type, assets: [] };
+        setPortfolios(portfolios.map(p => p.id === targetPortId ? { ...p, accounts: [...p.accounts, account] } : p));
+        setNewAccount({ name: '', type: 'crypto_exchange', portfolioId: '' });
+        setIsAddingAccount(false);
+    };
+
+    const handleDeleteAccount = (portId, accId) => setPortfolios(portfolios.map(p => p.id === portId ? { ...p, accounts: p.accounts.filter(a => a.id !== accId) } : p));
+
+    const handleSymbolChange = (e) => {
+        const sym = e.target.value.toUpperCase();
+        let newType = newAsset.assetType;
+        const targetAcc = portfolios.find(p => p.id === isAddingAsset.portfolioId)?.accounts.find(a => a.id === isAddingAsset.accountId);
+        if (targetAcc?.type === 'broker_ar') {
+            if (['AL30','GD30','AE38','AL29'].includes(sym)) newType = 'bono_ar';
+            else if (['YPFD','GGAL','PAMP','BMA','CEPU'].includes(sym)) newType = 'accion_ar';
+            else if (['SPY','QQQ','AAPL','MSFT','KO','AMZN'].includes(sym)) newType = 'cedear_ar';
+        } else if (targetAcc?.type === 'broker_br') {
+            newType = 'stock_br';
+        } else if (targetAcc?.type === 'crypto_exchange' && ['BTC','ETH','USDT','SOL'].includes(sym)) {
+            newType = 'crypto';
+        }
+        setNewAsset({ ...newAsset, symbol: sym, assetType: newType });
+    };
+
+    const handleAddAsset = (e) => {
+        e.preventDefault();
+        if (!newAsset.symbol || !newAsset.amount) return;
+        
+        const tx = { id: Date.now().toString(), type: 'buy', amount: newAsset.amount, price: newAsset.purchasePrice || 0, date: newAsset.purchaseDate || new Date().toISOString().split('T')[0] };
+        const assetObj = { ...newAsset, id: Date.now().toString(), transactions: [tx] };
+
+        setPortfolios(portfolios.map(p => p.id === isAddingAsset.portfolioId ? {
+            ...p, accounts: p.accounts.map(acc => acc.id === isAddingAsset.accountId ? {
+                ...acc, assets: [...acc.assets, assetObj]
+            } : acc)
+        } : p));
+        
+        setNewAsset({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' });
+        setIsAddingAsset({ active: false, portfolioId: null, accountId: null });
+    };
+
+    const handleDeleteAsset = (portId, accId, assetId) => {
+        setPortfolios(portfolios.map(p => p.id === portId ? {
+            ...p, accounts: p.accounts.map(acc => acc.id === accId ? {
+                ...acc, assets: acc.assets.filter(a => a.id !== assetId)
+            } : acc)
+        } : p));
+    };
+
+    const updateAssetInPortfolio = (portId, accId, asId, updater) => {
+        setPortfolios(prev => prev.map(p => p.id === portId ? {
+            ...p, accounts: p.accounts.map(a => a.id === accId ? {
+                ...a, assets: a.assets.map(as => as.id === asId ? updater(as) : as)
+            } : a)
+        } : p));
+    };
+
+    const handleUpdateApy = (apyVal, dateVal) => {
+        updateAssetInPortfolio(selectedAsset.portfolioId, selectedAsset.accountId, selectedAsset.assetId, (as) => ({
+            ...as, apy: apyVal, apyStartDate: dateVal
+        }));
+    };
+
+    const handleAddTransaction = (tx) => {
+        updateAssetInPortfolio(selectedAsset.portfolioId, selectedAsset.accountId, selectedAsset.assetId, (as) => {
+            const txAmt = parseFloat(tx.amount);
+            const newAmount = tx.type === 'buy' ? parseFloat(as.amount) + txAmt : Math.max(0, parseFloat(as.amount) - txAmt);
+            const newTx = { ...tx, id: Date.now().toString() };
+            return {
+                ...as, amount: newAmount, transactions: [...(as.transactions || []), newTx].sort((a,b) => new Date(b.date) - new Date(a.date))
+            };
+        });
+    };
+
+    const toggleSet = (set, id, setter) => {
+        const newSet = new Set(set);
+        newSet.has(id) ? newSet.delete(id) : newSet.add(id);
+        setter(newSet);
+    };
+
+    const fetchHistoricalPrice = async (symbol, assetType, dateStr) => {
+        if (!dateStr || !symbol) return;
+        setIsFetchingHistory(true);
+        try {
+            const timestamp = new Date(dateStr).getTime();
+            const sym = symbol.toUpperCase();
+
+            if (['crypto', 'tokenized_stock'].includes(assetType)) {
+                const targetUrl = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=1d&startTime=${timestamp}&limit=1`;
+                try {
+                    const res = await fetch(targetUrl);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.length > 0) setNewAsset(prev => ({ ...prev, purchasePrice: parseFloat(data[0][1]).toFixed(4) }));
+                    }
+                } catch (e) {
+                    const resProxy = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+                    if (resProxy.ok) {
+                        const data = await resProxy.json();
+                        if (data && data.length > 0) setNewAsset(prev => ({ ...prev, purchasePrice: parseFloat(data[0][1]).toFixed(4) }));
+                    }
+                }
+            } else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
+                let ticker = sym;
+                if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType) && !ticker.endsWith('.BA')) {
+                    ticker = `${ticker}.BA`;
+                } else if (assetType === 'stock_br' && !ticker.endsWith('.SA')) {
+                    ticker = `${ticker}.SA`;
+                }
+                const period1 = Math.floor(timestamp / 1000);
+                const period2 = period1 + 86400; 
+                const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1d`;
+                
+                try {
+                    const parsed = await fetchWithFallbacks(targetUrl);
+                    if (parsed && parsed?.chart?.result?.[0]?.indicators?.quote?.[0]?.open?.[0]) {
+                        let rawPrice = parsed.chart.result[0].indicators.quote[0].open[0];
+                        if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) rawPrice = rawPrice / (forexRates.ARS || 1000); 
+                        if (assetType === 'stock_br') rawPrice = rawPrice / (forexRates.BRL || 5.15);
+                        setNewAsset(prev => ({ ...prev, purchasePrice: rawPrice.toFixed(2) }));
+                    }
+                } catch (e) {}
+            }
+        } catch (error) {}
+        setIsFetchingHistory(false);
+    };
+
+    // --- ASESOR DE IA (CHAT) ---
     const handleSendAiMessage = async (e = null, quickPrompt = null) => {
         if (e) e.preventDefault();
         const userText = quickPrompt || aiInput;
@@ -710,7 +574,7 @@ export default function App() {
                 simbolo: as.symbol, 
                 tipo: as.assetType,
                 unidades: parseFloat(as.amount).toFixed(4),
-                valor_actual_usd: getAssetValueUSD(as).toFixed(2)
+                valor_actual_usd: getAssetValueUSD(as, marketPrices, forexRates).toFixed(2)
             })))
         }));
 
@@ -877,195 +741,31 @@ export default function App() {
         setIsGlobalChartLoading(false);
     };
 
-    // --- ACCIONES DE CARTERA ---
-    const handleAddPortfolio = (e) => {
-        e.preventDefault();
-        if (!newPortfolioName.trim()) return;
-        const newPort = { id: Date.now().toString(), name: newPortfolioName, accounts: [] };
-        setPortfolios([...portfolios, newPort]);
-        setNewPortfolioName('');
-        setIsAddingPortfolio(false);
-        setActivePortfolioId(newPort.id);
-    };
-
-    const handleAddAccount = (e) => {
-        e.preventDefault();
-        if (!newAccount.name.trim()) return;
-        const targetPortId = newAccount.portfolioId || (portfolios[0]?.id);
-        const account = { id: Date.now().toString(), name: newAccount.name, type: newAccount.type, assets: [] };
-        setPortfolios(portfolios.map(p => p.id === targetPortId ? { ...p, accounts: [...p.accounts, account] } : p));
-        setNewAccount({ name: '', type: 'crypto_exchange', portfolioId: '' });
-        setIsAddingAccount(false);
-    };
-
-    const handleDeleteAccount = (portId, accId) => setPortfolios(portfolios.map(p => p.id === portId ? { ...p, accounts: p.accounts.filter(a => a.id !== accId) } : p));
-
-    const handleSymbolChange = (e) => {
-        const sym = e.target.value.toUpperCase();
-        let newType = newAsset.assetType;
-        const targetAcc = portfolios.find(p => p.id === isAddingAsset.portfolioId)?.accounts.find(a => a.id === isAddingAsset.accountId);
-        if (targetAcc?.type === 'broker_ar') {
-            if (['AL30','GD30','AE38','AL29'].includes(sym)) newType = 'bono_ar';
-            else if (['YPFD','GGAL','PAMP','BMA','CEPU'].includes(sym)) newType = 'accion_ar';
-            else if (['SPY','QQQ','AAPL','MSFT','KO','AMZN'].includes(sym)) newType = 'cedear_ar';
-        } else if (targetAcc?.type === 'broker_br') {
-            newType = 'stock_br';
-        } else if (targetAcc?.type === 'crypto_exchange' && ['BTC','ETH','USDT','SOL'].includes(sym)) {
-            newType = 'crypto';
-        }
-        setNewAsset({ ...newAsset, symbol: sym, assetType: newType });
-    };
-
-    const handleAddAsset = (e) => {
-        e.preventDefault();
-        if (!newAsset.symbol || !newAsset.amount) return;
-        
-        const tx = { id: Date.now().toString(), type: 'buy', amount: newAsset.amount, price: newAsset.purchasePrice || 0, date: newAsset.purchaseDate || new Date().toISOString().split('T')[0] };
-        const assetObj = { ...newAsset, id: Date.now().toString(), transactions: [tx] };
-
-        setPortfolios(portfolios.map(p => p.id === isAddingAsset.portfolioId ? {
-            ...p, accounts: p.accounts.map(acc => acc.id === isAddingAsset.accountId ? {
-                ...acc, assets: [...acc.assets, assetObj]
-            } : acc)
-        } : p));
-        
-        setNewAsset({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' });
-        setIsAddingAsset({ active: false, portfolioId: null, accountId: null });
-    };
-
-    const handleDeleteAsset = (portId, accId, assetId) => {
-        setPortfolios(portfolios.map(p => p.id === portId ? {
-            ...p, accounts: p.accounts.map(acc => acc.id === accId ? {
-                ...acc, assets: acc.assets.filter(a => a.id !== assetId)
-            } : acc)
-        } : p));
-    };
-
-    const updateAssetInPortfolio = (portId, accId, asId, updater) => {
-        setPortfolios(prev => prev.map(p => p.id === portId ? {
-            ...p, accounts: p.accounts.map(a => a.id === accId ? {
-                ...a, assets: a.assets.map(as => as.id === asId ? updater(as) : as)
-            } : a)
-        } : p));
-    };
-
-    const handleUpdateApy = (apyVal, dateVal) => {
-        updateAssetInPortfolio(selectedAsset.portfolioId, selectedAsset.accountId, selectedAsset.assetId, (as) => ({
-            ...as, apy: apyVal, apyStartDate: dateVal
-        }));
-    };
-
-    const handleAddTransaction = (tx) => {
-        updateAssetInPortfolio(selectedAsset.portfolioId, selectedAsset.accountId, selectedAsset.assetId, (as) => {
-            const txAmt = parseFloat(tx.amount);
-            const newAmount = tx.type === 'buy' ? parseFloat(as.amount) + txAmt : Math.max(0, parseFloat(as.amount) - txAmt);
-            const newTx = { ...tx, id: Date.now().toString() };
-            return {
-                ...as, amount: newAmount, transactions: [...(as.transactions || []), newTx].sort((a,b) => new Date(b.date) - new Date(a.date))
-            };
-        });
-    };
-
-    const toggleSet = (set, id, setter) => {
-        const newSet = new Set(set);
-        newSet.has(id) ? newSet.delete(id) : newSet.add(id);
-        setter(newSet);
-    };
-
-    const fetchHistoricalPrice = async (symbol, assetType, dateStr) => {
-        if (!dateStr || !symbol) return;
-        setIsFetchingHistory(true);
-        try {
-            const timestamp = new Date(dateStr).getTime();
-            const sym = symbol.toUpperCase();
-
-            if (['crypto', 'tokenized_stock'].includes(assetType)) {
-                const targetUrl = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=1d&startTime=${timestamp}&limit=1`;
-                try {
-                    const res = await fetch(targetUrl);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data && data.length > 0) setNewAsset(prev => ({ ...prev, purchasePrice: parseFloat(data[0][1]).toFixed(4) }));
-                    }
-                } catch (e) {
-                    const resProxy = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-                    if (resProxy.ok) {
-                        const data = await resProxy.json();
-                        if (data && data.length > 0) setNewAsset(prev => ({ ...prev, purchasePrice: parseFloat(data[0][1]).toFixed(4) }));
-                    }
-                }
-            } else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
-                let ticker = sym;
-                if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType) && !ticker.endsWith('.BA')) {
-                    ticker = `${ticker}.BA`;
-                } else if (assetType === 'stock_br' && !ticker.endsWith('.SA')) {
-                    ticker = `${ticker}.SA`;
-                }
-                const period1 = Math.floor(timestamp / 1000);
-                const period2 = period1 + 86400; 
-                const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1d`;
-                
-                try {
-                    const parsed = await fetchWithFallbacks(targetUrl);
-                    if (parsed && parsed?.chart?.result?.[0]?.indicators?.quote?.[0]?.open?.[0]) {
-                        let rawPrice = parsed.chart.result[0].indicators.quote[0].open[0];
-                        if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) rawPrice = rawPrice / (forexRates.ARS || 1000); 
-                        if (assetType === 'stock_br') rawPrice = rawPrice / (forexRates.BRL || 5.15);
-                        setNewAsset(prev => ({ ...prev, purchasePrice: rawPrice.toFixed(2) }));
-                    }
-                } catch (e) {}
-            }
-        } catch (error) {}
-        setIsFetchingHistory(false);
-    };
-
-    // --- PANTALLA DE INICIO DE SESIÓN / REGISTRO ---
-    if (!user) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans animate-fade-in">
-                <div className="absolute top-4 right-4 flex gap-2">
-                    <button onClick={() => setLang('es')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'es' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ESP 🇪🇸</button>
-                    <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'en' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ENG 🇬🇧</button>
-                </div>
-
-                <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-100 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
-                    <div className="text-center mb-8">
-                        <div className="bg-slate-900 p-3 rounded-2xl shadow-lg inline-block mb-4"><Activity className="w-8 h-8 text-blue-400" /></div>
-                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">DikyStar<span className="text-blue-600"> {t.title}</span></h1>
-                        <p className="text-sm text-slate-500 mt-2 font-medium">{t.slogan}</p>
-                    </div>
-
-                    {authError && <div className="mb-4 p-3 bg-red-50 text-red-600 border border-red-100 rounded-xl text-sm font-bold text-center">{authError}</div>}
-
-                    <form onSubmit={handleAuth} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">{t.email}</label>
-                            <InputField type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="tu@correo.com" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">{t.password}</label>
-                            <InputField type="password" required minLength="6" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" />
-                        </div>
-                        <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-md transition-all">
-                            {authMode === 'login' ? <><LogIn className="w-5 h-5"/> {t.enter}</> : <><UserPlus className="w-5 h-5"/> {t.register}</>}
-                        </button>
-                    </form>
-
-                    <div className="mt-6 text-center">
-                        <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }} className="text-sm text-slate-500 hover:text-blue-600 font-bold transition-colors">
-                            {authMode === 'login' ? t.noAccount : t.haveAccount}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // --- PANTALLA PRINCIPAL (DASHBOARD) ---
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 animate-fade-in">
             <div className="max-w-6xl mx-auto space-y-6">
+                
+                {/* Banner de Sincronización Local / Nube */}
+                <div className="bg-white border border-slate-200 rounded-3xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <div className={`p-3 rounded-2xl ${syncStatus === 'synced' && !cloudError ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                            {syncStatus === 'synced' && !cloudError ? <Cloud className="w-6 h-6 animate-pulse" /> : <CloudOff className="w-6 h-6" />}
+                        </div>
+                        <div>
+                            <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                                {syncStatus === 'synced' && !cloudError ? t.savingCloud : t.localModeTitle}
+                                <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-bold">Canal: {syncKey}</span>
+                            </h4>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">{t.localModeDesc}</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => { setTempSyncKey(syncKey); setIsSyncModalOpen(true); }} 
+                        className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                    >
+                        <Settings className="w-4 h-4" /> Sincronizar Dispositivos
+                    </button>
+                </div>
 
                 <header className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
@@ -1075,9 +775,7 @@ export default function App() {
                                 <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">DikyStar<span className="text-blue-600"> {t.title}</span></h1>
                                 <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 mt-1">
                                     {syncStatus === 'syncing' ? <Loader2 className="w-4 h-4 animate-spin text-blue-500" /> : <Cloud className="w-4 h-4 text-emerald-500" />}
-                                    <span>
-                                        {syncStatus === 'syncing' ? t.savingCloud : user ? `${user.email}` : 'Sincronizado'}
-                                    </span>
+                                    <span>{syncStatus === 'syncing' ? 'Sincronizando la nube...' : 'Sincronizado'}</span>
                                     <span className="mx-1 hidden md:inline">•</span>
                                     <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg">
                                         <Settings className="w-3.5 h-3.5" />
@@ -1085,9 +783,6 @@ export default function App() {
                                             <option value="USD">USD</option><option value="EUR">EUR</option><option value="BRL">BRL</option><option value="ARS">ARS</option>
                                         </select>
                                     </div>
-                                    <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 flex items-center gap-1 font-bold ml-2 bg-red-50 px-2 py-1 rounded-lg transition-colors">
-                                        <LogOut className="w-3.5 h-3.5" /> {t.logout}
-                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1158,7 +853,7 @@ export default function App() {
                                 globalStats.current > 0 ? (
                                     <div className={`h-64 transition-all duration-300 ${!showBalances ? 'blur-md opacity-40 select-none pointer-events-none' : ''}`}>
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart><Pie data={getPieChartData()} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{getPieChartData().map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><RechartsTooltip formatter={(v) => formatCurrency(v / getDisplayRate())} /><Legend verticalAlign="bottom" height={36} /></PieChart>
+                                            <PieChart><Pie data={getPieChartData()} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{getPieChartData().map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><RechartsTooltip formatter={(v) => formatCurrencyRaw(v, displayCurrency)} /><Legend verticalAlign="bottom" height={36} /></PieChart>
                                         </ResponsiveContainer>
                                     </div>
                                 ) : <div className="h-64 flex items-center justify-center text-slate-400 text-center text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">Añade activos para ver distribución.</div>
@@ -1176,7 +871,7 @@ export default function App() {
                                                 <AreaChart data={globalChartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
                                                     <defs><linearGradient id="cGP" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={globalChartData[globalChartData.length - 1].price >= globalChartData[0].price ? '#10b981' : '#ef4444'} stopOpacity={0.3}/><stop offset="95%" stopColor="#fff" stopOpacity={0}/></linearGradient></defs>
                                                     <XAxis dataKey="date" hide /><YAxis domain={['auto', 'auto']} hide />
-                                                    <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }} itemStyle={{ color: globalChartData[globalChartData.length - 1].price >= globalChartData[0].price ? '#10b981' : '#ef4444', fontWeight: '900', fontSize: '16px' }} formatter={(v) => [formatCurrency(v), 'Patrimonio']} />
+                                                    <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }} itemStyle={{ color: globalChartData[globalChartData.length - 1].price >= globalChartData[0].price ? '#10b981' : '#ef4444', fontWeight: '900', fontSize: '16px' }} formatter={(v) => [formatCurrencyRaw(v, displayCurrency), 'Patrimonio']} />
                                                     <Area type="monotone" dataKey="price" stroke={globalChartData[globalChartData.length - 1].price >= globalChartData[0].price ? '#10b981' : '#ef4444'} strokeWidth={2} fillOpacity={1} fill="url(#cGP)" />
                                                 </AreaChart>
                                             </ResponsiveContainer>
@@ -1219,7 +914,7 @@ export default function App() {
                                         const isAccHidden = hiddenAccounts.has(account.id);
                                         const totalHidden = !showBalances || isPortHidden || isAccHidden;
                                         let accCurrentUSD = 0, accInvestedUSD = 0;
-                                        account.assets.forEach(a => { accCurrentUSD += getAssetValueUSD(a); accInvestedUSD += getAssetInvestedUSD(a); });
+                                        account.assets.forEach(a => { accCurrentUSD += getAssetValueUSD(a, marketPrices, forexRates); accInvestedUSD += getAssetInvestedUSD(a, marketPrices, forexRates); });
                                         const isCollapsed = collapsedAccounts.has(account.id);
 
                                         return (
@@ -1251,7 +946,7 @@ export default function App() {
                                                         {account.assets.length === 0 ? <p className="text-sm text-slate-400 text-center py-4">Sin activos.</p> : (
                                                             <div className="space-y-2">
                                                                 {account.assets.map(asset => {
-                                                                    const currentUSD = getAssetValueUSD(asset);
+                                                                    const currentUSD = getAssetValueUSD(asset, marketPrices, forexRates);
                                                                     const totalAmt = getAssetTotalAmount(asset);
                                                                     const isFiat = asset.assetType === 'fiat' || asset.assetType === 'manual';
                                                                     const yieldAmt = getAssetYieldAmount(asset);
@@ -1415,6 +1110,40 @@ export default function App() {
                                 </form>
                             </div>
 
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL CONFIGURACIÓN SINCRONIZACIÓN SIN CONTRASEÑA */}
+                {isSyncModalOpen && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in font-sans">
+                        <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
+                            <div className="p-6 border-b border-slate-100"><h3 className="text-xl font-bold text-slate-900">{t.syncTitle}</h3></div>
+                            <form onSubmit={handleSetSyncKey} className="p-6 space-y-4">
+                                <p className="text-xs text-slate-500 font-medium leading-relaxed">{t.syncDesc}</p>
+                                <div>
+                                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">Identificador Compartido</label>
+                                    <div className="flex gap-2">
+                                        <InputField 
+                                            type="text" 
+                                            required 
+                                            value={tempSyncKey} 
+                                            onChange={(e) => setTempSyncKey(e.target.value)} 
+                                            placeholder="Ej: dikystar-portafolio-compartido"
+                                            className="font-mono text-sm uppercase"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1">Usa letras, números y guiones. Evita caracteres especiales.</p>
+                                </div>
+                                <div className="flex gap-3 pt-4">
+                                    <button type="button" onClick={() => setIsSyncModalOpen(false)} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-700 text-sm">
+                                        {t.cancel}
+                                    </button>
+                                    <button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-sm hover:bg-blue-700 transition-colors">
+                                        {t.save}
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}

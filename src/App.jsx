@@ -1,11 +1,160 @@
 import React, { useState, useEffect } from 'react';
 import {
     Wallet, Building2, Bitcoin, Plus, Trash2, RefreshCw,
-    TrendingUp, DollarSign, PiggyBank, Cloud, CloudOff,
-    Loader2, Globe, Landmark, Eye, EyeOff, PieChart as PieChartIcon,
-    ChevronDown, ChevronRight, Euro, Coins, Settings, ArrowUpRight, ArrowDownRight, Activity, LineChart as LineChartIcon
+    TrendingUp, Cloud, Loader2, Globe, Landmark, Eye, EyeOff, 
+    PieChart as PieChartIcon, ChevronDown, ChevronRight, Euro, 
+    Coins, Settings, ArrowUpRight, ArrowDownRight, Activity, 
+    LineChart as LineChartIcon, LogIn, UserPlus, LogOut, ExternalLink, ShieldAlert
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, AreaChart, Area, XAxis, YAxis } from 'recharts';
+
+// --- CONFIGURACIÓN DE BASE DE DATOS Y USUARIOS (FIREBASE) ---
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+
+// Configuración de Firebase sincronizada de tu proyecto 'dikystar-investment'
+const VERCEL_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDJEA-eT-3vGiZwPkkk6ixn88i75qwp-vY",
+    authDomain: "dikystar-investment.firebaseapp.com",
+    projectId: "dikystar-investment",
+    storageBucket: "dikystar-investment.firebasestorage.app",
+    messagingSenderId: "273717181133",
+    appId: "1:273717181133:web:e4a98b67474e1d84aec784"
+};
+
+const getFirebaseConfig = () => {
+    if (typeof __firebase_config !== 'undefined') return JSON.parse(__firebase_config);
+    return VERCEL_FIREBASE_CONFIG;
+};
+
+const isFirebaseConfigured = getFirebaseConfig().apiKey !== "TU_API_KEY";
+let app, auth, db, appId;
+
+if (isFirebaseConfigured) {
+    try {
+        app = initializeApp(getFirebaseConfig());
+        auth = getAuth(app);
+        db = getFirestore(app);
+        appId = typeof __app_id !== 'undefined' ? __app_id : 'dikystar-main-app';
+    } catch (e) {
+        console.error("Error inicializando Firebase:", e);
+    }
+}
+
+// --- DICCIONARIO DE IDIOMAS (ESPAÑOL / INGLÉS) ---
+const TRANSLATIONS = {
+    es: {
+        title: "investment",
+        slogan: "Inicia sesión para sincronizar tus carteras",
+        email: "Correo Electrónico",
+        password: "Contraseña",
+        enter: "Entrar",
+        register: "Registrarme",
+        noAccount: "¿No tienes cuenta? Crea una gratis",
+        haveAccount: "¿Ya tienes cuenta? Inicia sesión",
+        localModeTitle: "Ejecutando en Modo Local (Esta PC)",
+        localModeDesc: "Tus datos se guardan en el navegador. Para sincronizar con el celular, configura tus claves en el código.",
+        savingCloud: "Guardando en la nube...",
+        savingLocal: "Modo Local (Guardando en PC)",
+        totalWealth: "Patrimonio Total",
+        tradingView: "TradingView",
+        allPortfolios: "Todas las Carteras",
+        newPortfolio: "Nueva Cartera",
+        distribution: "Distribución",
+        evolution: "Evolución",
+        addAccount: "Añadir Cuenta / Entidad",
+        emptyPortfolio: "Cartera vacía",
+        emptyPortfolioDesc: "Comienza creando una Cartera y añadiendo cuentas.",
+        noAccounts: "Sin cuentas en esta cartera.",
+        assetsUnits: "uds.",
+        addAsset: "Añadir Activo",
+        cancel: "Cancelar",
+        create: "Crear",
+        save: "Guardar",
+        name: "Nombre",
+        type: "Tipo",
+        destinationPortfolio: "Cartera Destino",
+        symbol: "Símbolo",
+        amount: "Cantidad",
+        purchaseDate: "Fecha de Compra (Opcional)",
+        purchasePrice: "Precio USD (Opcional)",
+        apyRate: "Tasa APY (%)",
+        apyDate: "Fecha de Inicio APY",
+        apyYield: "Rendimiento APY Generado",
+        history: "Historial",
+        addActivity: "Añadir Actividad",
+        buy: "Compra / Depósito",
+        sell: "Venta / Retiro",
+        chart: "Gráfico",
+        errorWeakPassword: "La contraseña debe tener al menos 6 caracteres.",
+        errorEmailInUse: "Este correo electrónico ya está registrado.",
+        errorInvalidEmail: "El correo electrónico no es válido.",
+        errorCredentials: "Credenciales incorrectas o usuario no encontrado.",
+        logout: "Salir",
+        loading: "Cargando...",
+        stablecoins: "Estables",
+        bluechips: "Bluechips",
+        blockchains: "Cripto Redes",
+        altcoins: "Altcoins",
+        other: "Otros"
+    },
+    en: {
+        title: "investment",
+        slogan: "Log in to synchronize your portfolios",
+        email: "Email Address",
+        password: "Password",
+        enter: "Sign In",
+        register: "Register",
+        noAccount: "Don't have an account? Sign up free",
+        haveAccount: "Already have an account? Log in",
+        localModeTitle: "Running in Local Mode (This PC)",
+        localModeDesc: "Your data is stored in your browser. To sync with mobile, set up your keys in the code.",
+        savingCloud: "Saving to cloud...",
+        savingLocal: "Local Mode (Saving on PC)",
+        totalWealth: "Total Wealth",
+        tradingView: "TradingView",
+        allPortfolios: "All Portfolios",
+        newPortfolio: "New Portfolio",
+        distribution: "Distribution",
+        evolution: "Evolution",
+        addAccount: "Add Account / Entity",
+        emptyPortfolio: "Empty Portfolio",
+        emptyPortfolioDesc: "Start by creating a Portfolio and adding accounts.",
+        noAccounts: "No accounts in this portfolio.",
+        assetsUnits: "units",
+        addAsset: "Add Asset",
+        cancel: "Cancel",
+        create: "Create",
+        save: "Save",
+        name: "Name",
+        type: "Type",
+        destinationPortfolio: "Destination Portfolio",
+        symbol: "Symbol",
+        amount: "Amount",
+        purchaseDate: "Purchase Date (Optional)",
+        purchasePrice: "USD Price (Optional)",
+        apyRate: "APY Rate (%)",
+        apyDate: "APY Start Date",
+        apyYield: "Generated APY Yield",
+        history: "Activity History",
+        addActivity: "Add Activity",
+        buy: "Buy / Deposit",
+        sell: "Sell / Withdraw",
+        chart: "Chart",
+        errorWeakPassword: "Password must be at least 6 characters long.",
+        errorEmailInUse: "This email is already registered.",
+        errorInvalidEmail: "The email address is invalid.",
+        errorCredentials: "Wrong credentials or user not found.",
+        logout: "Logout",
+        loading: "Loading...",
+        stablecoins: "Stables",
+        bluechips: "Bluechips",
+        blockchains: "Blockchains (L1/L2)",
+        altcoins: "Altcoins",
+        other: "Others"
+    }
+};
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e'];
 
@@ -25,7 +174,6 @@ const fetchWithFallbacks = async (url) => {
         `https://corsproxy.io/?${encodeURIComponent(url)}`,
         `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
     ];
-    
     for (let proxy of proxies) {
         try {
             const res = await fetch(proxy);
@@ -33,16 +181,11 @@ const fetchWithFallbacks = async (url) => {
                 if (proxy.includes('/get?url=')) {
                     const data = await res.json();
                     if (data && data.contents) {
-                        try { return JSON.parse(data.contents); }
-                        catch (e) { return data.contents; }
+                        try { return JSON.parse(data.contents); } catch (e) { return data.contents; }
                     }
-                } else {
-                    return await res.json();
-                }
+                } else return await res.json();
             }
-        } catch (e) {
-            // Falla silenciosa para continuar con el siguiente proxy
-        }
+        } catch (e) {}
     }
     return null;
 };
@@ -51,7 +194,6 @@ const fetchHistoricalData = async (symbol, assetType, tfLabel) => {
     const tf = TIMEFRAMES.find(t => t.label === tfLabel) || TIMEFRAMES[2];
     const sym = symbol.toUpperCase();
     const dataPoints = [];
-
     try {
         if (['crypto', 'tokenized_stock'].includes(assetType)) {
             const url = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=${tf.binanceInterval}&limit=${tf.binanceLimit}`;
@@ -63,39 +205,45 @@ const fetchHistoricalData = async (symbol, assetType, tfLabel) => {
                 const resProxy = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
                 if (resProxy.ok) data = await resProxy.json();
             }
-
-            if (data && Array.isArray(data)) {
-                data.forEach(k => {
-                    dataPoints.push({ ts: parseInt(k[0]), price: parseFloat(k[4]) });
-                });
-            }
+            if (data && Array.isArray(data)) data.forEach(k => dataPoints.push({ ts: parseInt(k[0]), price: parseFloat(k[4]) }));
         } else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
             let ticker = sym;
             if (assetType !== 'stock_global' && !ticker.endsWith('.BA')) ticker = `${ticker}.BA`;
-            
             const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=${tf.yahooRange}&interval=${tf.yahooInterval}`;
             const data = await fetchWithFallbacks(url);
-            
             if (data && data?.chart?.result?.[0]) {
                 const result = data.chart.result[0];
                 const timestamps = result.timestamp || [];
                 const prices = result.indicators?.quote?.[0]?.close || [];
-                
-                timestamps.forEach((ts, i) => {
-                    if (prices[i] !== null && prices[i] !== undefined) {
-                        dataPoints.push({ ts: ts * 1000, price: prices[i] });
-                    }
-                });
+                timestamps.forEach((ts, i) => { if (prices[i] !== null && prices[i] !== undefined) dataPoints.push({ ts: ts * 1000, price: prices[i] }); });
             }
         }
-    } catch (e) {
-        console.error("Error al obtener datos históricos del activo", sym, e);
-    }
-    
+    } catch (e) {}
     return dataPoints;
 };
 
-const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose }) => {
+// COMPONENTES REFORZADOS PARA MÓVIL (Fuerzan texto oscuro y fondo blanco estricto contra bugs de modo oscuro forzado)
+const InputField = (props) => (
+    <input 
+        {...props} 
+        className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none shadow-sm focus:border-blue-500 text-slate-900 bg-white ${props.className || ''}`}
+        style={{ backgroundColor: '#ffffff', color: '#0f172a', colorScheme: 'light', ...props.style }}
+    />
+);
+
+const SelectField = (props) => (
+    <select 
+        {...props} 
+        className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none bg-white shadow-sm focus:border-blue-500 text-slate-900 ${props.className || ''}`}
+        style={{ backgroundColor: '#ffffff', color: '#0f172a', colorScheme: 'light', ...props.style }}
+    >
+        {props.children}
+    </select>
+);
+
+
+const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang }) => {
+    const t = TRANSLATIONS[lang];
     const [tab, setTab] = useState('info');
     const [apy, setApy] = useState(asset.apy || '');
     const [apyDate, setApyDate] = useState(asset.apyStartDate || new Date().toISOString().split('T')[0]);
@@ -117,26 +265,15 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose }) =>
         return parseFloat(asset.amount) * (parseFloat(asset.apy) / 100) * (days / 365);
     }, [asset]);
 
-    useEffect(() => {
-        if (tab === 'chart') loadChartData();
-    }, [tab, chartTimeframe]);
+    useEffect(() => { if (tab === 'chart') loadChartData(); }, [tab, chartTimeframe]);
 
     const loadChartData = async () => {
-        setIsChartLoading(true);
-        setChartData([]);
-        
+        setIsChartLoading(true); setChartData([]);
         const history = await fetchHistoricalData(asset.symbol, asset.assetType, chartTimeframe);
-        
-        const formattedData = history.map(item => ({
-            date: new Date(item.ts).toLocaleDateString('es-AR', { 
-                month: 'short', day: 'numeric', 
-                hour: ['1D', '5D'].includes(chartTimeframe) ? '2-digit' : undefined, 
-                minute: ['1D', '5D'].includes(chartTimeframe) ? '2-digit' : undefined 
-            }),
+        setChartData(history.map(item => ({
+            date: new Date(item.ts).toLocaleDateString('es-AR', { month: 'short', day: 'numeric', hour: ['1D', '5D'].includes(chartTimeframe) ? '2-digit' : undefined, minute: ['1D', '5D'].includes(chartTimeframe) ? '2-digit' : undefined }),
             price: item.price
-        }));
-        
-        setChartData(formattedData);
+        })));
         setIsChartLoading(false);
     };
 
@@ -148,21 +285,17 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose }) =>
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
                 <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900">Activo: {asset.symbol}</h3>
-                        <p className="text-sm text-slate-500">Saldo Total: {(parseFloat(asset.amount) + yieldAmount).toFixed(4)}</p>
+                        <h3 className="text-lg font-bold text-slate-900">{t.addAsset}: {asset.symbol}</h3>
+                        <p className="text-sm text-slate-500">{t.amount}: {(parseFloat(asset.amount) + yieldAmount).toFixed(4)}</p>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700 bg-slate-200 p-2 rounded-full transition-colors">
-                        Cerrar
-                    </button>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700 bg-slate-200 p-2 rounded-full transition-colors">{t.cancel}</button>
                 </div>
                 
                 <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
                     <button onClick={() => setTab('info')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors ${tab === 'info' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>Resumen & APY</button>
-                    <button onClick={() => setTab('history')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors ${tab === 'history' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>Historial</button>
+                    <button onClick={() => setTab('history')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors ${tab === 'history' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>{t.history}</button>
                     {(!['manual', 'fiat', 'caucion_ar', 'fci_ar'].includes(asset.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(asset.symbol.toUpperCase())) && (
-                        <button onClick={() => setTab('chart')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${tab === 'chart' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>
-                            <LineChartIcon className="w-4 h-4"/> Gráfico
-                        </button>
+                        <button onClick={() => setTab('chart')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${tab === 'chart' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}><LineChartIcon className="w-4 h-4"/> {t.chart}</button>
                     )}
                 </div>
 
@@ -171,26 +304,25 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose }) =>
                         <div className="space-y-6">
                             <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex justify-between items-center">
                                 <div>
-                                    <p className="text-sm text-green-800 font-bold mb-1">Rendimiento APY Generado</p>
+                                    <p className="text-sm text-green-800 font-bold mb-1">{t.apyYield}</p>
                                     <p className="text-3xl font-black text-green-600">+{yieldAmount.toFixed(4)} <span className="text-lg">{asset.symbol}</span></p>
                                 </div>
                                 <Activity className="w-10 h-10 text-green-300" />
                             </div>
                             
                             <div className="space-y-3">
-                                <h4 className="font-bold text-slate-800 flex items-center gap-2"><Settings className="w-4 h-4"/> Configuración de Staking / Earn</h4>
-                                <p className="text-xs text-slate-500">Ingresa el porcentaje anual (APY) para calcular las ganancias automáticas diarias que se sumarán a tu saldo.</p>
+                                <h4 className="font-bold text-slate-800 flex items-center gap-2"><Settings className="w-4 h-4"/> Configuración APY</h4>
                                 <div className="flex gap-4">
                                     <div className="flex-1">
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Tasa APY (%)</label>
-                                        <input type="number" step="any" min="0" value={apy} onChange={(e) => setApy(e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-500" placeholder="Ej: 12" />
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t.apyRate}</label>
+                                        <InputField type="number" step="any" min="0" value={apy} onChange={(e) => setApy(e.target.value)} placeholder="Ej: 12" />
                                     </div>
                                     <div className="flex-1">
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Fecha de Inicio</label>
-                                        <input type="date" value={apyDate} onChange={(e) => setApyDate(e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-500" />
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t.apyDate}</label>
+                                        <InputField type="date" value={apyDate} onChange={(e) => setApyDate(e.target.value)} />
                                     </div>
                                 </div>
-                                <button onClick={() => onUpdateApy(apy, apyDate)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-sm">Guardar Configuración APY</button>
+                                <button onClick={() => onUpdateApy(apy, apyDate)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-sm">{t.save}</button>
                             </div>
                         </div>
                     )}
@@ -198,44 +330,38 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose }) =>
                     {tab === 'history' && (
                         <div className="space-y-6">
                             <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-3">
-                                <h4 className="font-bold text-blue-900 text-sm flex items-center gap-2"><Plus className="w-4 h-4"/> Añadir Actividad</h4>
+                                <h4 className="font-bold text-blue-900 text-sm flex items-center gap-2"><Plus className="w-4 h-4"/> {t.addActivity}</h4>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <select value={txType} onChange={(e) => setTxType(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white outline-none">
-                                        <option value="buy">Compra / Depósito</option>
-                                        <option value="sell">Venta / Retiro</option>
-                                    </select>
-                                    <input type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white outline-none" />
-                                    <input type="number" step="any" min="0" placeholder="Cantidad" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white outline-none" />
-                                    <input type="number" step="any" min="0" placeholder="Precio USD c/u (Opcional)" value={txPrice} onChange={(e) => setTxPrice(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white outline-none" />
+                                    <SelectField value={txType} onChange={(e) => setTxType(e.target.value)} className="py-2 text-sm">
+                                        <option value="buy">{t.buy}</option>
+                                        <option value="sell">{t.sell}</option>
+                                    </SelectField>
+                                    <InputField type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="py-2 text-sm" />
+                                    <InputField type="number" step="any" min="0" placeholder={t.amount} value={txAmount} onChange={(e) => setTxAmount(e.target.value)} className="py-2 text-sm" />
+                                    <InputField type="number" step="any" min="0" placeholder={t.purchasePrice} value={txPrice} onChange={(e) => setTxPrice(e.target.value)} className="py-2 text-sm" />
                                 </div>
-                                <button onClick={(e) => { 
-                                    e.preventDefault(); 
-                                    if(txAmount) onAddTransaction({ type: txType, amount: txAmount, price: txPrice, date: txDate }); 
-                                    setTxAmount(''); setTxPrice(''); 
-                                }} className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors">Registrar Transacción</button>
+                                <button onClick={(e) => { e.preventDefault(); if(txAmount) onAddTransaction({ type: txType, amount: txAmount, price: txPrice, date: txDate }); setTxAmount(''); setTxPrice(''); }} className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors">{t.save}</button>
                             </div>
 
                             <div>
-                                <h4 className="font-bold text-slate-800 text-sm mb-3">Historial</h4>
+                                <h4 className="font-bold text-slate-800 text-sm mb-3">{t.history}</h4>
                                 <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                                     {!asset.transactions || asset.transactions.length === 0 ? (
-                                        <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-100 text-center">No hay actividad registrada.</p>
+                                        <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-100 text-center">No hay actividad.</p>
                                     ) : (
                                         asset.transactions.map((tx, idx) => (
-                                            <div key={idx} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-lg shadow-sm hover:border-slate-200 transition-colors">
+                                            <div key={idx} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 border ${tx.type === 'buy' ? 'border-green-200 text-green-600' : 'border-red-200 text-red-600'}`}>
                                                         {tx.type === 'buy' ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-bold text-slate-800">{tx.type === 'buy' ? 'Compra/Ingreso' : 'Venta/Retiro'}</p>
+                                                        <p className="text-sm font-bold text-slate-800">{tx.type === 'buy' ? t.buy : t.sell}</p>
                                                         <p className="text-xs text-slate-500">{tx.date}</p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className={`text-sm font-bold ${tx.type === 'buy' ? 'text-green-600' : 'text-red-600'}`}>
-                                                        {tx.type === 'buy' ? '+' : '-'}{parseFloat(tx.amount).toFixed(4)}
-                                                    </p>
+                                                    <p className={`text-sm font-bold ${tx.type === 'buy' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'buy' ? '+' : '-'}{parseFloat(tx.amount).toFixed(4)}</p>
                                                     {parseFloat(tx.price) > 0 && <p className="text-xs text-slate-500">${parseFloat(tx.price).toFixed(2)} USD c/u</p>}
                                                 </div>
                                             </div>
@@ -250,23 +376,13 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose }) =>
                         <div className="space-y-4">
                             <div className="flex gap-2 bg-slate-100 p-1 rounded-lg overflow-x-auto">
                                 {TIMEFRAMES.map(tf => (
-                                    <button 
-                                        key={tf.label}
-                                        onClick={() => setChartTimeframe(tf.label)}
-                                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${chartTimeframe === tf.label ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
-                                    >
+                                    <button key={tf.label} onClick={() => setChartTimeframe(tf.label)} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${chartTimeframe === tf.label ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>
                                         {tf.label}
                                     </button>
                                 ))}
                             </div>
-                            
                             <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 relative">
-                                {isChartLoading && (
-                                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl">
-                                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                    </div>
-                                )}
-                                
+                                {isChartLoading && <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}
                                 <div className="h-64">
                                     {chartData.length > 0 ? (
                                         <ResponsiveContainer width="100%" height="100%">
@@ -279,34 +395,23 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose }) =>
                                                 </defs>
                                                 <XAxis dataKey="date" hide />
                                                 <YAxis domain={['auto', 'auto']} hide />
-                                                <RechartsTooltip 
-                                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
-                                                    labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }}
-                                                    itemStyle={{ color: chartColor, fontWeight: '900', fontSize: '16px' }}
-                                                    formatter={(value) => [value.toFixed(2), 'Precio']}
-                                                />
+                                                <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }} itemStyle={{ color: chartColor, fontWeight: '900', fontSize: '16px' }} formatter={(value) => [value.toFixed(2), 'Precio']} />
                                                 <Area type="monotone" dataKey="price" stroke={chartColor} strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" />
                                             </AreaChart>
                                         </ResponsiveContainer>
-                                    ) : (
-                                        !isChartLoading && <div className="h-full flex items-center justify-center text-slate-400 text-sm">No hay datos suficientes para el periodo seleccionado.</div>
-                                    )}
+                                    ) : (!isChartLoading && <div className="h-full flex items-center justify-center text-slate-400 text-sm">Sin datos suficientes.</div>)}
                                 </div>
-                                
                                 {chartData.length > 0 && (
                                     <div className="mt-4 flex justify-between items-center px-2">
                                         <div>
                                             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Precio Actual</p>
-                                            <p className={`text-xl font-black ${isChartPositive ? 'text-green-600' : 'text-red-500'}`}>
-                                                {chartData[chartData.length - 1].price.toFixed(2)}
-                                            </p>
+                                            <p className={`text-xl font-black ${isChartPositive ? 'text-green-600' : 'text-red-500'}`}>{chartData[chartData.length - 1].price.toFixed(2)}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Variación</p>
                                             <p className={`text-sm font-bold flex items-center justify-end gap-1 ${isChartPositive ? 'text-green-600' : 'text-red-500'}`}>
                                                 {isChartPositive ? <ArrowUpRight className="w-4 h-4"/> : <ArrowDownRight className="w-4 h-4"/>}
                                                 {Math.abs(chartData[chartData.length - 1].price - chartData[0].price).toFixed(2)} 
-                                                ({((chartData[chartData.length - 1].price - chartData[0].price) / chartData[0].price * 100).toFixed(2)}%)
                                             </p>
                                         </div>
                                     </div>
@@ -321,6 +426,19 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose }) =>
 };
 
 export default function App() {
+    // --- ESTADO DE IDIOMA ---
+    const [lang, setLang] = useState('es'); // 'es' | 'en'
+    const t = TRANSLATIONS[lang];
+
+    // --- ESTADOS DE AUTENTICACIÓN Y NUBE ---
+    const [user, setUser] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [authMode, setAuthMode] = useState('login'); // login | register
+    const [authEmail, setAuthEmail] = useState('');
+    const [authPassword, setAuthPassword] = useState('');
+    const [authError, setAuthError] = useState('');
+
+    // --- ESTADOS PRINCIPALES DE CARTERA ---
     const [portfolios, setPortfolios] = useState([]);
     const [activePortfolioId, setActivePortfolioId] = useState('all');
     
@@ -335,10 +453,8 @@ export default function App() {
     const [hiddenPortfolios, setHiddenPortfolios] = useState(new Set());
     const [hiddenAccounts, setHiddenAccounts] = useState(new Set());
     
-    // UI States
-    const [dashboardTab, setDashboardTab] = useState('distribution'); // 'distribution' | 'evolution'
+    const [dashboardTab, setDashboardTab] = useState('distribution'); 
     
-    // Evolución General State
     const [globalChartTimeframe, setGlobalChartTimeframe] = useState('1M');
     const [globalChartData, setGlobalChartData] = useState([]);
     const [isGlobalChartLoading, setIsGlobalChartLoading] = useState(false);
@@ -351,50 +467,121 @@ export default function App() {
     const [selectedAsset, setSelectedAsset] = useState(null);
 
     const [newAccount, setNewAccount] = useState({ name: '', type: 'crypto_exchange', portfolioId: '' });
-    const [newAsset, setNewAsset] = useState({ 
-        symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' 
-    });
+    const [newAsset, setNewAsset] = useState({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' });
     const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
+    // --- EFECTOS DE AUTENTICACIÓN ---
     useEffect(() => {
-        const savedV2 = localStorage.getItem('DikyStarPortfolios_v2');
-        if (savedV2) {
-            try {
-                setPortfolios(JSON.parse(savedV2));
-                return;
-            } catch (e) { console.error("Error al cargar carteras", e); }
-        }
+        if (!isFirebaseConfigured) { setAuthLoading(false); return; }
+        const unsubscribe = onAuthStateChanged(auth, (u) => {
+            setUser(u);
+            setAuthLoading(false);
+        });
+        return () => unsubscribe();
     }, []);
 
+    // --- CARGAR DATOS DESDE LOCAL STORAGE Y FIRESTORE ---
     useEffect(() => {
-        if (portfolios.length > 0) {
-            localStorage.setItem('DikyStarPortfolios_v2', JSON.stringify(portfolios));
-            setSyncStatus('synced');
-            updateAllPrices();
+        const loadLocal = () => {
+            const local = localStorage.getItem('DikyStarPortfolios_v2');
+            if (local) {
+                try { setPortfolios(JSON.parse(local)); } catch (e) { console.error(e); }
+            }
+        };
+
+        if (!isFirebaseConfigured) {
+            loadLocal();
+            return;
+        }
+
+        if (!user) return;
+
+        const fetchData = async () => {
+            try {
+                setSyncStatus('syncing');
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists() && docSnap.data().portfolios) {
+                    setPortfolios(docSnap.data().portfolios);
+                } else {
+                    const local = localStorage.getItem('DikyStarPortfolios_v2');
+                    if (local) setPortfolios(JSON.parse(local));
+                }
+                setSyncStatus('synced');
+            } catch (e) { console.error("Error cargando de la nube", e); }
+        };
+        fetchData();
+    }, [user]);
+
+    // --- GUARDAR DATOS EN FIRESTORE Y LOCAL ---
+    useEffect(() => {
+        if (portfolios.length === 0) return;
+        
+        localStorage.setItem('DikyStarPortfolios_v2', JSON.stringify(portfolios));
+        updateAllPrices();
+
+        if (user && isFirebaseConfigured) {
+            const saveData = async () => {
+                setSyncStatus('syncing');
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'users', user.uid);
+                    await setDoc(docRef, { portfolios });
+                    setSyncStatus('synced');
+                } catch (e) { console.error("Error guardando en la nube", e); }
+            };
+            saveData();
         }
     }, [portfolios]);
 
-    // Cargar Gráfico Global de Patrimonio cuando cambia la pestaña o la temporalidad o portafolio activo
     useEffect(() => {
         if (dashboardTab === 'evolution') {
             loadGlobalChart();
         }
-    }, [dashboardTab, globalChartTimeframe, activePortfolioId]);
+    }, [dashboardTab, globalChartTimeframe, activePortfolioId, user]);
 
+    // --- FUNCIONES DE AUTENTICACIÓN ---
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        try {
+            if (authMode === 'login') await signInWithEmailAndPassword(auth, authEmail, authPassword);
+            else await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        } catch (err) {
+            console.error("Firebase Auth Error:", err);
+            if (err.code === 'auth/operation-not-allowed') {
+                setAuthError(lang === 'es' ? '❌ Error: Debes habilitar "Correo/Contraseña" en la consola de Firebase (Sección Authentication).' : '❌ Error: You must enable "Email/Password" in Firebase Authentication.');
+            } else if (err.code === 'auth/weak-password') {
+                setAuthError(t.errorWeakPassword);
+            } else if (err.code === 'auth/email-already-in-use') {
+                setAuthError(t.errorEmailInUse);
+            } else if (err.code === 'auth/invalid-email') {
+                setAuthError(t.errorInvalidEmail);
+            } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+                setAuthError(t.errorCredentials);
+            } else {
+                setAuthError(`Error: ${err.message}`);
+            }
+        }
+    };
+
+    const handleLogout = () => {
+        if (auth) signOut(auth);
+        setUser(null);
+        setPortfolios([]);
+        localStorage.removeItem('DikyStarPortfolios_v2');
+    };
+
+    // --- RESTO DE FUNCIONES DEL SISTEMA ---
     const loadGlobalChart = async () => {
         if (portfolios.length === 0) return;
         setIsGlobalChartLoading(true);
-        
         let allAssets = [];
         portfolios.forEach(port => {
             if (activePortfolioId === 'all' || port.id === activePortfolioId) {
-                port.accounts.forEach(acc => {
-                    acc.assets.forEach(asset => allAssets.push(asset));
-                });
+                port.accounts.forEach(acc => { acc.assets.forEach(asset => allAssets.push(asset)); });
             }
         });
 
-        // Agrupar activos únicos para no repetir peticiones
         const uniqueAssetsMap = {};
         allAssets.forEach(a => {
             if (!['manual', 'caucion_ar', 'fci_ar'].includes(a.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(a.symbol.toUpperCase())) {
@@ -403,14 +590,10 @@ export default function App() {
         });
 
         const historyMap = {}; 
-        for (const sym of Object.keys(uniqueAssetsMap)) {
-            historyMap[sym] = await fetchHistoricalData(sym, uniqueAssetsMap[sym], globalChartTimeframe);
-        }
+        for (const sym of Object.keys(uniqueAssetsMap)) historyMap[sym] = await fetchHistoricalData(sym, uniqueAssetsMap[sym], globalChartTimeframe);
 
         const allTimestampsSet = new Set();
-        Object.values(historyMap).forEach(arr => {
-            arr.forEach(point => allTimestampsSet.add(point.ts));
-        });
+        Object.values(historyMap).forEach(arr => arr.forEach(point => allTimestampsSet.add(point.ts)));
         const sortedTs = Array.from(allTimestampsSet).sort((a,b) => a - b);
 
         const aggregatedData = [];
@@ -421,588 +604,307 @@ export default function App() {
                 const point = historyMap[sym].find(p => p.ts === ts);
                 if (point) lastKnownPrices[sym] = point.price;
             });
-
             let totalUSD = 0;
             allAssets.forEach(asset => {
                 const sym = asset.symbol.toUpperCase();
-                const amt = getAssetTotalAmount(asset);
+                const amt = parseFloat(asset.amount || 0) + (asset.apy ? (parseFloat(asset.amount) * (parseFloat(asset.apy)/100) * ((Date.now() - new Date(asset.apyStartDate).getTime())/(1000*60*60*24*365))) : 0);
                 
-                if (['USD', 'USDT', 'USDC', 'DAI'].includes(sym)) {
-                    totalUSD += amt;
-                } else if (sym === 'ARS') {
-                    totalUSD += amt / (forexRates.ARS || 1000);
-                } else if (sym === 'EUR') {
-                    totalUSD += amt / (forexRates.EUR || 0.92);
-                } else if (sym === 'BRL') {
-                    totalUSD += amt / (forexRates.BRL || 5.15);
-                } else if (['manual', 'caucion_ar'].includes(asset.assetType)) {
-                    totalUSD += amt;
-                } else if (lastKnownPrices[sym]) {
+                if (['USD', 'USDT', 'USDC', 'DAI'].includes(sym)) totalUSD += amt;
+                else if (sym === 'ARS') totalUSD += amt / (forexRates.ARS || 1000);
+                else if (sym === 'EUR') totalUSD += amt / (forexRates.EUR || 0.92);
+                else if (sym === 'BRL') totalUSD += amt / (forexRates.BRL || 5.15);
+                else if (['manual', 'caucion_ar'].includes(asset.assetType)) totalUSD += amt;
+                else if (lastKnownPrices[sym]) {
                     let historicalPrice = lastKnownPrices[sym];
-                    if (['accion_ar', 'bono_ar', 'cedear_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) {
-                        historicalPrice = historicalPrice / (forexRates.ARS || 1000);
-                    }
+                    if (['accion_ar', 'bono_ar', 'cedear_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) historicalPrice = historicalPrice / (forexRates.ARS || 1000);
                     totalUSD += amt * historicalPrice;
-                } else if (asset.purchasePrice) {
-                    totalUSD += amt * parseFloat(asset.purchasePrice);
-                }
+                } else if (asset.purchasePrice) totalUSD += amt * parseFloat(asset.purchasePrice);
             });
-
             aggregatedData.push({
-                date: new Date(ts).toLocaleDateString('es-AR', { 
-                    month: 'short', day: 'numeric', 
-                    hour: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined, 
-                    minute: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined 
-                }),
-                price: totalUSD * getDisplayRate()
+                date: new Date(ts).toLocaleDateString('es-AR', { month: 'short', day: 'numeric', hour: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined, minute: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined }),
+                price: totalUSD * (displayCurrency === 'USD' ? 1 : (forexRates[displayCurrency] || 1))
             });
         });
-
         setGlobalChartData(aggregatedData);
         setIsGlobalChartLoading(false);
     };
 
     const getCryptoCategory = (symbol) => {
         const s = symbol.toUpperCase();
-        if (['USDT','USDC','DAI','FDUSD','TUSD'].includes(s)) return 'Stablecoins';
-        if (['BTC','ETH'].includes(s)) return 'Bluechips';
-        if (['FET','AGIX','RNDR','OCEAN','TAO','WLD'].includes(s)) return 'Inteligencia Artificial';
-        if (['UNI','AAVE','MKR','CRV','LDO','SNX'].includes(s)) return 'DeFi';
-        if (['DOGE','SHIB','PEPE','WIF','FLOKI','BONK'].includes(s)) return 'Memecoins';
-        if (['AXS','SAND','MANA','GALA','ILV','YGG'].includes(s)) return 'Juegos y NFTs';
-        if (['CHZ','BAR','PSG','CITY','ATM'].includes(s)) return 'Fan Tokens';
-        if (['SOL','ADA','DOT','AVAX','MATIC','LINK','ATOM'].includes(s)) return 'Blockchains (L1/L2)';
-        return 'Altcoins';
+        if (['USDT','USDC','DAI','FDUSD','TUSD'].includes(s)) return t.stablecoins;
+        if (['BTC','ETH'].includes(s)) return t.bluechips;
+        if (['SOL','ADA','DOT','AVAX','MATIC','LINK','ATOM'].includes(s)) return t.blockchains;
+        return t.altcoins;
     };
 
     const getDisplayRate = () => displayCurrency === 'USD' ? 1 : (forexRates[displayCurrency] || 1);
-
-    const formatCurrency = (valueInUSD, customCurrency = null) => {
-        const targetCurrency = customCurrency || displayCurrency;
-        let rate = targetCurrency === 'USD' ? 1 : (forexRates[targetCurrency] || 1);
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency', currency: targetCurrency, minimumFractionDigits: 2, maximumFractionDigits: 2
-        }).format(valueInUSD * rate);
-    };
-
-    const formatPercent = (percent) => {
-        if (isNaN(percent) || !isFinite(percent)) return "0.00%";
-        return `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`;
-    };
-
-    const getAssetYieldAmount = (asset) => {
-        if (!asset.apy || parseFloat(asset.apy) <= 0 || !asset.apyStartDate) return 0;
-        const start = new Date(asset.apyStartDate).getTime();
-        const days = (Date.now() - start) / (1000 * 60 * 60 * 24);
-        if (days <= 0) return 0;
-        return parseFloat(asset.amount) * (parseFloat(asset.apy) / 100) * (days / 365);
-    };
-
+    const formatCurrency = (val, cur = null) => new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || displayCurrency, minimumFractionDigits: 2 }).format(val * (cur === 'USD' ? 1 : getDisplayRate()));
+    const formatPercent = (p) => isNaN(p) || !isFinite(p) ? "0.00%" : `${p >= 0 ? '+' : ''}${p.toFixed(2)}%`;
+    const getAssetYieldAmount = (asset) => (!asset.apy || !asset.apyStartDate) ? 0 : Math.max(0, parseFloat(asset.amount) * (parseFloat(asset.apy) / 100) * ((Date.now() - new Date(asset.apyStartDate).getTime()) / (1000 * 60 * 60 * 24 * 365)));
     const getAssetTotalAmount = (asset) => parseFloat(asset.amount || 0) + getAssetYieldAmount(asset);
-
+    
     const getAssetValueUSD = (asset) => {
-        const totalAmount = getAssetTotalAmount(asset);
-        if (['manual', 'caucion_ar'].includes(asset.assetType)) return totalAmount;
-        
-        const sym = asset.symbol.toUpperCase();
-        if (['USD', 'USDT', 'USDC', 'DAI'].includes(sym)) return totalAmount;
-        if (sym === 'ARS') return totalAmount / forexRates.ARS;
-        if (sym === 'EUR') return totalAmount / forexRates.EUR;
-        if (sym === 'BRL') return totalAmount / forexRates.BRL;
-        
-        const price = marketPrices[sym];
-        if (price) return totalAmount * price;
-        if (asset.purchasePrice) return totalAmount * parseFloat(asset.purchasePrice);
-        return 0; 
-    };
-
-    const getAssetCostBasis = (asset) => {
-        if (asset.transactions && asset.transactions.length > 0) {
-            let totalBuyAmount = 0;
-            let totalBuyCost = 0;
-            asset.transactions.forEach(tx => {
-                if (tx.type === 'buy') {
-                    totalBuyAmount += parseFloat(tx.amount || 0);
-                    totalBuyCost += parseFloat(tx.amount || 0) * parseFloat(tx.price || 0);
-                }
-            });
-            if (totalBuyAmount > 0) return totalBuyCost / totalBuyAmount;
-        }
-        return parseFloat(asset.purchasePrice || 0);
+        const tVal = getAssetTotalAmount(asset);
+        if (['manual', 'caucion_ar'].includes(asset.assetType)) return tVal;
+        const s = asset.symbol.toUpperCase();
+        if (['USD', 'USDT', 'USDC', 'DAI'].includes(s)) return tVal;
+        if (s === 'ARS') return tVal / forexRates.ARS;
+        if (s === 'EUR') return tVal / forexRates.EUR;
+        if (s === 'BRL') return tVal / forexRates.BRL;
+        return (marketPrices[s] ? tVal * marketPrices[s] : (asset.purchasePrice ? tVal * parseFloat(asset.purchasePrice) : 0));
     };
 
     const getAssetInvestedUSD = (asset) => {
-        const costBasis = getAssetCostBasis(asset);
-        const totalAmount = getAssetTotalAmount(asset);
-        if (costBasis > 0) return totalAmount * costBasis;
-        return getAssetValueUSD(asset); 
-    };
-
-    const calculatePnL = (current, invested) => {
-        const pnlValue = current - invested;
-        return { value: pnlValue, percent: invested > 0 ? (pnlValue / invested) * 100 : 0 };
-    };
-
-    const fetchHistoricalPrice = async (symbol, assetType, dateStr) => {
-        if (!dateStr || !symbol) return;
-        setIsFetchingHistory(true);
-        try {
-            const timestamp = new Date(dateStr).getTime();
-            const sym = symbol.toUpperCase();
-
-            if (['crypto', 'tokenized_stock'].includes(assetType)) {
-                const targetUrl = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=1d&startTime=${timestamp}&limit=1`;
-                try {
-                    const res = await fetch(targetUrl);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data && data.length > 0) setNewAsset(prev => ({ ...prev, purchasePrice: parseFloat(data[0][1]).toFixed(4) }));
-                    }
-                } catch (e) {
-                    const resProxy = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-                    if (resProxy.ok) {
-                        const data = await resProxy.json();
-                        if (data && data.length > 0) setNewAsset(prev => ({ ...prev, purchasePrice: parseFloat(data[0][1]).toFixed(4) }));
-                    }
-                }
-            } else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
-                let ticker = sym;
-                if (assetType !== 'stock_global' && !ticker.endsWith('.BA')) ticker = `${ticker}.BA`;
-                const period1 = Math.floor(timestamp / 1000);
-                const period2 = period1 + 86400; 
-                const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1d`;
-                
-                try {
-                    const parsed = await fetchWithFallbacks(targetUrl);
-                    if (parsed && parsed?.chart?.result?.[0]?.indicators?.quote?.[0]?.open?.[0]) {
-                        let rawPrice = parsed.chart.result[0].indicators.quote[0].open[0];
-                        if (assetType !== 'stock_global') rawPrice = rawPrice / (forexRates.ARS || 1000); 
-                        setNewAsset(prev => ({ ...prev, purchasePrice: rawPrice.toFixed(2) }));
-                    }
-                } catch (e) {}
-            }
-        } catch (error) {}
-        setIsFetchingHistory(false);
+        let amt = 0, cost = 0;
+        (asset.transactions || []).forEach(tx => { if (tx.type === 'buy') { amt += parseFloat(tx.amount || 0); cost += parseFloat(tx.amount || 0) * parseFloat(tx.price || 0); }});
+        return (amt > 0 ? cost / amt : parseFloat(asset.purchasePrice || 0)) > 0 ? getAssetTotalAmount(asset) * (amt > 0 ? cost / amt : parseFloat(asset.purchasePrice || 0)) : getAssetValueUSD(asset); 
     };
 
     const updateAllPrices = async () => {
         setIsLoadingPrices(true);
-        setSyncStatus('syncing');
-        let newPrices = { ...marketPrices };
-        let newRates = { ...forexRates };
-
-        try {
-            const blueRes = await fetch('https://dolarapi.com/v1/dolares/blue');
-            if (blueRes.ok) newRates.ARS = (await blueRes.json()).venta;
-        } catch (e) {}
-
-        try {
-            const forexRes = await fetch('https://open.er-api.com/v6/latest/USD');
-            if (forexRes.ok) {
-                const forexData = await forexRes.json();
-                if (forexData?.rates) {
-                    newRates.EUR = forexData.rates.EUR;
-                    newRates.BRL = forexData.rates.BRL;
-                }
-            }
-            setForexRates(newRates);
-        } catch (e) {}
-
-        let requiredSymbols = [];
-        portfolios.forEach(port => {
-            port.accounts.forEach(acc => {
-                acc.assets.forEach(asset => {
-                    if (!['manual', 'caucion_ar', 'fci_ar'].includes(asset.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(asset.symbol.toUpperCase())) {
-                        requiredSymbols.push(asset);
-                    }
-                });
-            });
-        });
-
-        for (const asset of requiredSymbols) {
-            const sym = asset.symbol.toUpperCase();
+        let nP = { ...marketPrices }, nR = { ...forexRates };
+        try { const r = await fetch('https://dolarapi.com/v1/dolares/blue'); if(r.ok) nR.ARS = (await r.json()).venta; } catch(e){}
+        try { const r = await fetch('https://open.er-api.com/v6/latest/USD'); if(r.ok) { const d = await r.json(); if(d?.rates){ nR.EUR = d.rates.EUR; nR.BRL = d.rates.BRL; } } } catch(e){}
+        setForexRates(nR);
+        let req = []; portfolios.forEach(p => p.accounts.forEach(a => a.assets.forEach(as => { if (!['manual', 'caucion_ar', 'fci_ar'].includes(as.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(as.symbol.toUpperCase())) req.push(as); })));
+        for (const a of req) {
+            const sym = a.symbol.toUpperCase();
             try {
-                if (['crypto', 'tokenized_stock'].includes(asset.assetType)) {
-                    const targetUrl = `https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`;
-                    try {
-                        const res = await fetch(targetUrl);
-                        if (res.ok) newPrices[sym] = parseFloat((await res.json()).price);
-                    } catch (e) {
-                        const resProxy = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-                        if (resProxy.ok) newPrices[sym] = parseFloat((await resProxy.json()).price);
-                    }
-                } else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) {
-                    let ticker = sym;
-                    if (asset.assetType !== 'stock_global' && !ticker.endsWith('.BA')) ticker = `${ticker}.BA`;
-                    
-                    const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=1d&interval=1d`;
-                    try {
-                        const parsed = await fetchWithFallbacks(targetUrl);
-                        if (parsed && parsed?.chart?.result?.[0]?.meta?.regularMarketPrice) {
-                            const rawPrice = parsed.chart.result[0].meta.regularMarketPrice;
-                            newPrices[sym] = asset.assetType !== 'stock_global' ? rawPrice / (newRates.ARS || 1000) : rawPrice;
-                        }
-                    } catch (e) {}
+                if (['crypto', 'tokenized_stock'].includes(a.assetType)) {
+                    let r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`);
+                    if(!r.ok) r = await fetch(`https://corsproxy.io/?${encodeURIComponent(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`)}`);
+                    if(r.ok) nP[sym] = parseFloat((await r.json()).price);
+                } else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(a.assetType)) {
+                    let tick = sym; if (a.assetType !== 'stock_global' && !tick.endsWith('.BA')) tick = `${tick}.BA`;
+                    const d = await fetchWithFallbacks(`https://query2.finance.yahoo.com/v8/finance/chart/${tick}?range=1d&interval=1d`);
+                    if(d?.chart?.result?.[0]?.meta?.regularMarketPrice) nP[sym] = a.assetType !== 'stock_global' ? d.chart.result[0].meta.regularMarketPrice / (nR.ARS || 1000) : d.chart.result[0].meta.regularMarketPrice;
                 }
-            } catch (error) {}
+            } catch (e) {}
         }
-        setMarketPrices(newPrices);
-        setIsLoadingPrices(false);
-        setSyncStatus('synced');
-        
+        setMarketPrices(nP); setIsLoadingPrices(false);
         if (dashboardTab === 'evolution') loadGlobalChart();
     };
 
     const globalStats = portfolios.reduce((acc, port) => {
         if (activePortfolioId !== 'all' && port.id !== activePortfolioId) return acc;
-        port.accounts.forEach(account => {
-            account.assets.forEach(asset => {
-                acc.current += getAssetValueUSD(asset);
-                acc.invested += getAssetInvestedUSD(asset);
-            });
-        });
+        port.accounts.forEach(a => a.assets.forEach(as => { acc.current += getAssetValueUSD(as); acc.invested += getAssetInvestedUSD(as); }));
         return acc;
     }, { current: 0, invested: 0 });
-
-    const globalPnL = calculatePnL(globalStats.current, globalStats.invested);
 
     const getPieChartData = () => {
         const data = {};
         portfolios.forEach(port => {
             if (activePortfolioId !== 'all' && port.id !== activePortfolioId) return;
-            port.accounts.forEach(acc => {
-                acc.assets.forEach(asset => {
-                    const value = getAssetValueUSD(asset) * getDisplayRate();
-                    let category = 'Otros';
-                    
-                    if (['crypto', 'tokenized_stock'].includes(asset.assetType)) category = getCryptoCategory(asset.symbol);
-                    else if (['USDT','USDC','DAI','FDUSD'].includes(asset.symbol.toUpperCase())) category = 'Stablecoins';
-                    else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar', 'fci_ar'].includes(asset.assetType)) category = 'Acciones/Bonos/Fondos';
-                    else if (asset.assetType === 'fiat') category = 'Efectivo/Bancos';
-                    else if (['manual', 'caucion_ar'].includes(asset.assetType)) category = 'Renta Fija / Manual';
-                    
-                    data[category] = (data[category] || 0) + value;
-                });
-            });
+            port.accounts.forEach(acc => acc.assets.forEach(asset => {
+                const value = getAssetValueUSD(asset) * getDisplayRate();
+                let cat = t.other;
+                if (['crypto', 'tokenized_stock'].includes(asset.assetType)) cat = getCryptoCategory(asset.symbol);
+                else if (['USDT','USDC','DAI','FDUSD'].includes(asset.symbol.toUpperCase())) cat = t.stablecoins;
+                else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar', 'fci_ar'].includes(asset.assetType)) cat = 'Acciones/Bonos/Fondos';
+                else if (asset.assetType === 'fiat') cat = 'Efectivo/Bancos';
+                else if (['manual', 'caucion_ar'].includes(asset.assetType)) cat = 'Renta Fija / Manual';
+                data[cat] = (data[cat] || 0) + value;
+            }));
         });
-        return Object.keys(data).map(key => ({ name: key, value: data[key] })).filter(item => item.value > 0);
+        return Object.keys(data).map(key => ({ name: key, value: data[key] })).filter(i => i.value > 0);
     };
 
-    const handleAddPortfolio = (e) => {
-        e.preventDefault();
-        if (!newPortfolioName.trim()) return;
-        const newPort = { id: Date.now().toString(), name: newPortfolioName, accounts: [] };
-        setPortfolios([...portfolios, newPort]);
-        setNewPortfolioName('');
-        setIsAddingPortfolio(false);
-        setActivePortfolioId(newPort.id);
-    };
-
-    const handleAddAccount = (e) => {
-        e.preventDefault();
-        if (!newAccount.name.trim()) return;
-        const targetPortId = newAccount.portfolioId || (portfolios[0]?.id);
-        const account = { id: Date.now().toString(), name: newAccount.name, type: newAccount.type, assets: [] };
-        setPortfolios(portfolios.map(p => p.id === targetPortId ? { ...p, accounts: [...p.accounts, account] } : p));
-        setNewAccount({ name: '', type: 'crypto_exchange', portfolioId: '' });
-        setIsAddingAccount(false);
-    };
-
-    const handleDeleteAccount = (portId, accId) => setPortfolios(portfolios.map(p => p.id === portId ? { ...p, accounts: p.accounts.filter(a => a.id !== accId) } : p));
-
-    const handleSymbolChange = (e) => {
-        const sym = e.target.value.toUpperCase();
-        let newType = newAsset.assetType;
-        const targetAcc = portfolios.find(p => p.id === isAddingAsset.portfolioId)?.accounts.find(a => a.id === isAddingAsset.accountId);
-        if (targetAcc?.type === 'broker_ar') {
-            if (['AL30','GD30','AE38','AL29'].includes(sym)) newType = 'bono_ar';
-            else if (['YPFD','GGAL','PAMP','BMA','CEPU'].includes(sym)) newType = 'accion_ar';
-            else if (['SPY','QQQ','AAPL','MSFT','KO','AMZN'].includes(sym)) newType = 'cedear_ar';
-        } else {
-            if (['BTC','ETH','USDT','SOL'].includes(sym)) newType = 'crypto';
-        }
-        setNewAsset({ ...newAsset, symbol: sym, assetType: newType });
-    };
-
-    const handleAddAsset = (e) => {
-        e.preventDefault();
-        if (!newAsset.symbol || !newAsset.amount) return;
-        
-        const tx = { id: Date.now().toString(), type: 'buy', amount: newAsset.amount, price: newAsset.purchasePrice || 0, date: newAsset.purchaseDate || new Date().toISOString().split('T')[0] };
-        const assetObj = { ...newAsset, id: Date.now().toString(), transactions: [tx] };
-
-        setPortfolios(portfolios.map(p => p.id === isAddingAsset.portfolioId ? {
-            ...p, accounts: p.accounts.map(acc => acc.id === isAddingAsset.accountId ? {
-                ...acc, assets: [...acc.assets, assetObj]
-            } : acc)
-        } : p));
-        
-        setNewAsset({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' });
-        setIsAddingAsset({ active: false, portfolioId: null, accountId: null });
-    };
-
-    const handleDeleteAsset = (portId, accId, assetId) => {
-        setPortfolios(portfolios.map(p => p.id === portId ? {
-            ...p, accounts: p.accounts.map(acc => acc.id === accId ? {
-                ...acc, assets: acc.assets.filter(a => a.id !== assetId)
-            } : acc)
-        } : p));
-    };
-
-    const updateAssetInPortfolio = (portId, accId, asId, updater) => {
-        setPortfolios(prev => prev.map(p => p.id === portId ? {
-            ...p, accounts: p.accounts.map(a => a.id === accId ? {
-                ...a, assets: a.assets.map(as => as.id === asId ? updater(as) : as)
-            } : a)
-        } : p));
-    };
-
-    const handleUpdateApy = (apyVal, dateVal) => {
-        updateAssetInPortfolio(selectedAsset.portfolioId, selectedAsset.accountId, selectedAsset.assetId, (as) => ({
-            ...as, apy: apyVal, apyStartDate: dateVal
-        }));
-    };
-
-    const handleAddTransaction = (tx) => {
-        updateAssetInPortfolio(selectedAsset.portfolioId, selectedAsset.accountId, selectedAsset.assetId, (as) => {
-            const txAmt = parseFloat(tx.amount);
-            const newAmount = tx.type === 'buy' ? parseFloat(as.amount) + txAmt : Math.max(0, parseFloat(as.amount) - txAmt);
-            const newTx = { ...tx, id: Date.now().toString() };
-            return {
-                ...as, amount: newAmount, transactions: [...(as.transactions || []), newTx].sort((a,b) => new Date(b.date) - new Date(a.date))
-            };
-        });
-    };
-
-    const toggleSet = (set, id, setter) => {
-        const newSet = new Set(set);
-        newSet.has(id) ? newSet.delete(id) : newSet.add(id);
-        setter(newSet);
-    };
-
-    const getAccountIcon = (type) => {
-        switch(type) {
-            case 'crypto_exchange': return <Bitcoin className="w-5 h-5 text-orange-500" />;
-            case 'broker_global': return <Globe className="w-5 h-5 text-blue-500" />;
-            case 'broker_ar': return <TrendingUp className="w-5 h-5 text-indigo-500" />;
-            case 'bank_us': return <Landmark className="w-5 h-5 text-emerald-500" />;
-            case 'bank_ar': return <Building2 className="w-5 h-5 text-cyan-500" />;
-            case 'bank_eu': return <Euro className="w-5 h-5 text-blue-600" />;
-            case 'bank_br': return <Building2 className="w-5 h-5 text-yellow-500" />;
-            case 'wallet': return <Wallet className="w-5 h-5 text-purple-500" />;
-            default: return <Wallet className="w-5 h-5 text-gray-500" />;
-        }
-    };
-
-    const PnLBadge = ({ pnlPercent }) => {
-        if (!pnlPercent || pnlPercent === 0) return null;
-        const isPositive = pnlPercent > 0;
+    // --- PANTALLA DE INICIO DE SESIÓN / REGISTRO ---
+    if (!user && isFirebaseConfigured) {
         return (
-            <div className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md ${isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                {formatPercent(pnlPercent)}
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
+                {/* Selector de Idioma en Login */}
+                <div className="absolute top-4 right-4 flex gap-2">
+                    <button onClick={() => setLang('es')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'es' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ESP 🇪🇸</button>
+                    <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'en' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ENG 🇬🇧</button>
+                </div>
+
+                <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-100 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
+                    <div className="text-center mb-8">
+                        <div className="bg-slate-900 p-3 rounded-2xl shadow-lg inline-block mb-4"><Activity className="w-8 h-8 text-blue-400" /></div>
+                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">DikyStar<span className="text-blue-600"> {t.title}</span></h1>
+                        <p className="text-sm text-slate-500 mt-2 font-medium">{t.slogan}</p>
+                    </div>
+
+                    {authError && <div className="mb-4 p-3 bg-red-50 text-red-600 border border-red-100 rounded-xl text-sm font-bold text-center">{authError}</div>}
+
+                    <form onSubmit={handleAuth} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">{t.email}</label>
+                            <InputField type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="tu@correo.com" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">{t.password}</label>
+                            <InputField type="password" required minLength="6" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" />
+                        </div>
+                        <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-md transition-all">
+                            {authMode === 'login' ? <><LogIn className="w-5 h-5"/> {t.enter}</> : <><UserPlus className="w-5 h-5"/> {t.register}</>}
+                        </button>
+                    </form>
+
+                    <div className="mt-6 text-center">
+                        <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }} className="text-sm text-slate-500 hover:text-blue-600 font-bold transition-colors">
+                            {authMode === 'login' ? t.noAccount : t.haveAccount}
+                        </button>
+                    </div>
+                </div>
             </div>
         );
-    };
-    
-    const isGlobalChartPositive = globalChartData.length > 1 && globalChartData[globalChartData.length - 1].price >= globalChartData[0].price;
-    const globalChartColor = isGlobalChartPositive ? '#10b981' : '#ef4444'; 
+    }
 
+    // --- PANTALLA PRINCIPAL (DASHBOARD) ---
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
             <div className="max-w-6xl mx-auto space-y-6">
                 
+                {/* Banner de Aviso: Modo Local (Si Firebase no está configurado) */}
+                {!isFirebaseConfigured && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-amber-100 p-2 rounded-xl text-amber-700">
+                                <ShieldAlert className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h4 className="font-extrabold text-amber-900 text-sm">{t.localModeTitle}</h4>
+                                <p className="text-xs text-amber-700 font-medium">{t.localModeDesc}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <header className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                         <div className="flex items-center gap-4">
-                            <div className="bg-slate-900 p-3 rounded-xl shadow-lg">
-                                <Activity className="w-8 h-8 text-blue-400" />
-                            </div>
+                            <div className="bg-slate-900 p-3 rounded-xl shadow-lg"><Activity className="w-8 h-8 text-blue-400" /></div>
                             <div>
-                                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">DikyStar<span className="text-blue-600"> investment</span></h1>
-                                <div className="flex items-center gap-2 text-sm text-slate-500 mt-1">
+                                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">DikyStar<span className="text-blue-600"> {t.title}</span></h1>
+                                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 mt-1">
                                     {syncStatus === 'syncing' ? <Loader2 className="w-4 h-4 animate-spin text-blue-500" /> : <Cloud className="w-4 h-4 text-emerald-500" />}
-                                    <span>{syncStatus === 'syncing' ? 'Actualizando mercados...' : 'Sincronizado'}</span>
-                                    <span className="mx-2">•</span>
-                                    <div className="flex items-center gap-1">
-                                        <Settings className="w-4 h-4" />
-                                        <select value={displayCurrency} onChange={(e) => setDisplayCurrency(e.target.value)} className="bg-transparent font-semibold cursor-pointer text-slate-700 outline-none">
+                                    <span>
+                                        {!isFirebaseConfigured 
+                                            ? t.savingLocal 
+                                            : syncStatus === 'syncing' 
+                                                ? t.savingCloud 
+                                                : user ? `${user.email}` : 'Sincronizado'}
+                                    </span>
+                                    <span className="mx-1 hidden md:inline">•</span>
+                                    <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg">
+                                        <Settings className="w-3.5 h-3.5" />
+                                        <select value={displayCurrency} onChange={(e) => setDisplayCurrency(e.target.value)} className="bg-transparent font-bold cursor-pointer outline-none text-slate-700" style={{ colorScheme: 'light' }}>
                                             <option value="USD">USD</option><option value="EUR">EUR</option><option value="BRL">BRL</option><option value="ARS">ARS</option>
                                         </select>
                                     </div>
+                                    {isFirebaseConfigured && user && (
+                                        <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 flex items-center gap-1 font-bold ml-2 bg-red-50 px-2 py-1 rounded-lg transition-colors">
+                                            <LogOut className="w-3.5 h-3.5" /> {t.logout}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 w-full lg:w-auto">
-                            <button onClick={() => setShowBalances(!showBalances)} className="bg-white p-3 rounded-full hover:bg-slate-100 transition-colors shadow-sm border border-slate-200">
-                                {showBalances ? <Eye className="w-6 h-6 text-slate-600" /> : <EyeOff className="w-6 h-6 text-slate-600" />}
-                            </button>
-                            <div className="flex-1 lg:flex-none">
-                                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Patrimonio Total</p>
-                                <div className="flex items-end gap-3">
-                                    <p className="text-3xl md:text-4xl font-bold text-slate-900">
+                        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                            {/* Selector de Idioma Global */}
+                            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                                <button onClick={() => setLang('es')} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${lang === 'es' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>ESP 🇪🇸</button>
+                                <button onClick={() => setLang('en')} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${lang === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>ENG 🇬🇧</button>
+                            </div>
+
+                            {/* BOTÓN TRADINGVIEW PROFESIONAL */}
+                            <a href="https://es.tradingview.com/chart/" target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-md">
+                                <ExternalLink className="w-5 h-5 text-blue-400" /> <span>{t.tradingView}</span>
+                            </a>
+                            
+                            <div className="flex items-center gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex-1 lg:flex-none">
+                                <button onClick={() => setShowBalances(!showBalances)} className="bg-white p-2.5 rounded-full hover:bg-slate-100 transition-colors shadow-sm border border-slate-200">
+                                    {showBalances ? <Eye className="w-5 h-5 text-slate-600" /> : <EyeOff className="w-5 h-5 text-slate-600" />}
+                                </button>
+                                <div className="flex-1 lg:flex-none">
+                                    <p className="text-[11px] font-black text-slate-500 uppercase tracking-wider">{t.totalWealth}</p>
+                                    <p className="text-2xl md:text-3xl font-black text-slate-900 leading-none mt-1">
                                         {showBalances ? formatCurrency(globalStats.current) : '********'}
                                     </p>
-                                    {showBalances && Math.abs(globalPnL.value) > 0 && (
-                                        <div className={`mb-1 text-sm font-bold flex items-center ${globalPnL.percent >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                            {globalPnL.percent >= 0 ? '+' : ''}{formatCurrency(globalPnL.value)} ({formatPercent(globalPnL.percent)})
-                                        </div>
-                                    )}
                                 </div>
+                                <button onClick={updateAllPrices} disabled={isLoadingPrices} className="bg-blue-100 text-blue-700 p-2.5 rounded-xl hover:bg-blue-200 transition-colors">
+                                    <RefreshCw className={`w-5 h-5 ${isLoadingPrices ? 'animate-spin' : ''}`} />
+                                </button>
                             </div>
-                            <button onClick={updateAllPrices} disabled={isLoadingPrices} className="bg-blue-100 text-blue-700 p-3 rounded-xl hover:bg-blue-200 transition-colors">
-                                <RefreshCw className={`w-5 h-5 ${isLoadingPrices ? 'animate-spin' : ''}`} />
-                            </button>
                         </div>
                     </div>
                 </header>
 
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    <button 
-                        onClick={() => setActivePortfolioId('all')}
-                        className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors shadow-sm ${activePortfolioId === 'all' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
-                    >
-                        Todas las Carteras
+                    <button onClick={() => setActivePortfolioId('all')} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors shadow-sm ${activePortfolioId === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>
+                        {t.allPortfolios}
                     </button>
                     {portfolios.map(p => (
-                        <button 
-                            key={p.id} onClick={() => setActivePortfolioId(p.id)}
-                            className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors shadow-sm flex items-center gap-2 ${activePortfolioId === p.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
-                        >
+                        <button key={p.id} onClick={() => setActivePortfolioId(p.id)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors shadow-sm flex items-center gap-2 ${activePortfolioId === p.id ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>
                             <Wallet className="w-4 h-4" /> {p.name}
                         </button>
                     ))}
-                    <button 
-                        onClick={() => setIsAddingPortfolio(true)}
-                        className="px-4 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 flex items-center gap-1"
-                    >
-                        <Plus className="w-4 h-4" /> Nueva Cartera
+                    <button onClick={() => setIsAddingPortfolio(true)} className="px-4 py-2.5 rounded-xl font-bold whitespace-nowrap transition-colors bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center gap-1">
+                        <Plus className="w-4 h-4" /> {t.newPortfolio}
                     </button>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Panel Izquierdo: Gráficos y Añadir */}
+                    {/* PANEL IZQUIERDO: Gráficos */}
                     <div className="lg:col-span-1 space-y-6">
                         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-                            {/* Pestañas del Panel */}
                             <div className="flex border-b border-slate-200 mb-4 pb-1">
-                                <button 
-                                    onClick={() => setDashboardTab('distribution')} 
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold transition-colors border-b-2 ${dashboardTab === 'distribution' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                                >
-                                    <PieChartIcon className="w-4 h-4" /> Distribución
+                                <button onClick={() => setDashboardTab('distribution')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold transition-colors border-b-2 ${dashboardTab === 'distribution' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                                    <PieChartIcon className="w-4 h-4" /> {t.distribution}
                                 </button>
-                                <button 
-                                    onClick={() => setDashboardTab('evolution')} 
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold transition-colors border-b-2 ${dashboardTab === 'evolution' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                                >
-                                    <LineChartIcon className="w-4 h-4" /> Evolución
+                                <button onClick={() => setDashboardTab('evolution')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold transition-colors border-b-2 ${dashboardTab === 'evolution' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                                    <LineChartIcon className="w-4 h-4" /> {t.evolution}
                                 </button>
                             </div>
 
-                            {/* Contenido: Distribución */}
                             {dashboardTab === 'distribution' && (
                                 globalStats.current > 0 ? (
                                     <div className={`h-64 transition-all duration-300 ${!showBalances ? 'blur-md opacity-40 select-none pointer-events-none' : ''}`}>
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart>
-                                                <Pie data={getPieChartData()} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                                    {getPieChartData().map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                                                </Pie>
-                                                <RechartsTooltip formatter={(value) => formatCurrency(value / getDisplayRate())} />
-                                                <Legend verticalAlign="bottom" height={36} />
-                                            </PieChart>
+                                            <PieChart><Pie data={getPieChartData()} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{getPieChartData().map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><RechartsTooltip formatter={(v) => formatCurrency(v / getDisplayRate())} /><Legend verticalAlign="bottom" height={36} /></PieChart>
                                         </ResponsiveContainer>
                                     </div>
-                                ) : (
-                                    <div className="h-64 flex items-center justify-center text-slate-400 text-center text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                        Añade activos para ver la distribución.
-                                    </div>
-                                )
+                                ) : <div className="h-64 flex items-center justify-center text-slate-400 text-center text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">Añade activos para ver distribución.</div>
                             )}
 
-                            {/* Contenido: Evolución */}
                             {dashboardTab === 'evolution' && (
                                 <div className="space-y-4">
                                     <div className="flex gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto scrollbar-hide">
-                                        {TIMEFRAMES.map(tf => (
-                                            <button 
-                                                key={tf.label}
-                                                onClick={() => setGlobalChartTimeframe(tf.label)}
-                                                className={`flex-1 py-1 px-2 text-xs font-bold rounded-md transition-colors ${globalChartTimeframe === tf.label ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
-                                            >
-                                                {tf.label}
-                                            </button>
-                                        ))}
+                                        {TIMEFRAMES.map(tf => <button key={tf.label} onClick={() => setGlobalChartTimeframe(tf.label)} className={`flex-1 py-1 px-2 text-xs font-bold rounded-md transition-colors ${globalChartTimeframe === tf.label ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>{tf.label}</button>)}
                                     </div>
                                     <div className={`h-56 relative ${!showBalances ? 'blur-md opacity-40 select-none pointer-events-none' : ''}`}>
-                                        {isGlobalChartLoading && (
-                                            <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl">
-                                                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                            </div>
-                                        )}
-                                        
+                                        {isGlobalChartLoading && <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}
                                         {globalChartData.length > 0 ? (
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <AreaChart data={globalChartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
-                                                    <defs>
-                                                        <linearGradient id="colorGlobalPrice" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor={globalChartColor} stopOpacity={0.3}/>
-                                                            <stop offset="95%" stopColor={globalChartColor} stopOpacity={0}/>
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <XAxis dataKey="date" hide />
-                                                    <YAxis domain={['auto', 'auto']} hide />
-                                                    <RechartsTooltip 
-                                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
-                                                        labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }}
-                                                        itemStyle={{ color: globalChartColor, fontWeight: '900', fontSize: '16px' }}
-                                                        formatter={(value) => [formatCurrency(value), 'Patrimonio']}
-                                                    />
-                                                    <Area type="monotone" dataKey="price" stroke={globalChartColor} strokeWidth={2} fillOpacity={1} fill="url(#colorGlobalPrice)" />
+                                                    <defs><linearGradient id="cGP" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={globalChartData[globalChartData.length - 1].price >= globalChartData[0].price ? '#10b981' : '#ef4444'} stopOpacity={0.3}/><stop offset="95%" stopColor="#fff" stopOpacity={0}/></linearGradient></defs>
+                                                    <XAxis dataKey="date" hide /><YAxis domain={['auto', 'auto']} hide />
+                                                    <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }} itemStyle={{ color: globalChartData[globalChartData.length - 1].price >= globalChartData[0].price ? '#10b981' : '#ef4444', fontWeight: '900', fontSize: '16px' }} formatter={(v) => [formatCurrency(v), 'Patrimonio']} />
+                                                    <Area type="monotone" dataKey="price" stroke={globalChartData[globalChartData.length - 1].price >= globalChartData[0].price ? '#10b981' : '#ef4444'} strokeWidth={2} fillOpacity={1} fill="url(#cGP)" />
                                                 </AreaChart>
                                             </ResponsiveContainer>
-                                        ) : (
-                                            !isGlobalChartLoading && <div className="h-full flex items-center justify-center text-slate-400 text-center text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">Datos insuficientes para generar el historial global.</div>
-                                        )}
+                                        ) : (!isGlobalChartLoading && <div className="h-full flex items-center justify-center text-slate-400 text-center text-sm bg-slate-50 rounded-xl border border-dashed border-slate-200">Datos insuficientes.</div>)}
                                     </div>
-                                    {globalChartData.length > 0 && showBalances && (
-                                        <div className="flex justify-between items-center px-1">
-                                            <div className="text-left">
-                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Inicio ({globalChartTimeframe})</p>
-                                                <p className="text-xs font-bold text-slate-600">{formatCurrency(globalChartData[0].price)}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Variación</p>
-                                                <p className={`text-xs font-bold flex items-center justify-end gap-1 ${isGlobalChartPositive ? 'text-green-600' : 'text-red-500'}`}>
-                                                    {isGlobalChartPositive ? <ArrowUpRight className="w-3 h-3"/> : <ArrowDownRight className="w-3 h-3"/>}
-                                                    {formatCurrency(Math.abs(globalChartData[globalChartData.length - 1].price - globalChartData[0].price))}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             )}
                         </div>
 
-                        <button 
-                            onClick={() => {
-                                setNewAccount({ name: '', type: 'crypto_exchange', portfolioId: activePortfolioId !== 'all' ? activePortfolioId : (portfolios[0]?.id || '') });
-                                setIsAddingAccount(true);
-                            }}
-                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md"
-                        >
-                            <Plus className="w-5 h-5" /> Añadir Cuenta / Entidad
+                        <button onClick={() => { setNewAccount({ name: '', type: 'crypto_exchange', portfolioId: activePortfolioId !== 'all' ? activePortfolioId : (portfolios[0]?.id || '') }); setIsAddingAccount(true); }} className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md">
+                            <Plus className="w-5 h-5" /> {t.addAccount}
                         </button>
                     </div>
 
-                    <div className="lg:col-span-2 space-y-8">
+                    {/* PANEL DERECHO: Carteras */}
+                    <div className="lg:col-span-2 space-y-6">
                         {portfolios.length === 0 ? (
                             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
                                 <Coins className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                                <h3 className="text-xl font-bold text-slate-700 mb-2">Cartera vacía</h3>
-                                <p className="text-slate-500">Comienza creando una Cartera y añadiendo cuentas.</p>
+                                <h3 className="text-xl font-bold text-slate-700 mb-2">{t.emptyPortfolio}</h3>
+                                <p className="text-slate-500">{t.emptyPortfolioDesc}</p>
                             </div>
                         ) : (
                             portfolios.filter(p => activePortfolioId === 'all' || p.id === activePortfolioId).map(port => {
@@ -1010,40 +912,33 @@ export default function App() {
                                 return (
                                 <div key={port.id} className="space-y-4">
                                     {activePortfolioId === 'all' && (
-                                        <div className="flex items-center justify-between border-b border-slate-200 pb-2 mt-4">
-                                            <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
-                                                {port.name}
-                                            </h2>
-                                            <button onClick={() => toggleSet(hiddenPortfolios, port.id, setHiddenPortfolios)} className="text-slate-400 hover:text-slate-700">
+                                        <div className="flex items-center justify-between border-b border-slate-200 pb-2 mt-2">
+                                            <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">{port.name}</h2>
+                                            <button onClick={() => { const s = new Set(hiddenPortfolios); s.has(port.id) ? s.delete(port.id) : s.add(port.id); setHiddenPortfolios(s); }} className="text-slate-400 hover:text-slate-700">
                                                 {isPortHidden ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                             </button>
                                         </div>
                                     )}
 
-                                    {port.accounts.length === 0 && <p className="text-sm text-slate-400 italic py-2">Sin cuentas en esta cartera.</p>}
+                                    {port.accounts.length === 0 && <p className="text-sm text-slate-400 italic py-2">{t.noAccounts}</p>}
 
                                     {port.accounts.map(account => {
                                         const isAccHidden = hiddenAccounts.has(account.id);
                                         const totalHidden = !showBalances || isPortHidden || isAccHidden;
-
                                         let accCurrentUSD = 0, accInvestedUSD = 0;
                                         account.assets.forEach(a => { accCurrentUSD += getAssetValueUSD(a); accInvestedUSD += getAssetInvestedUSD(a); });
-                                        const accPnL = calculatePnL(accCurrentUSD, accInvestedUSD);
                                         const isCollapsed = collapsedAccounts.has(account.id);
 
                                         return (
                                             <div key={account.id} className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${totalHidden ? 'opacity-75 grayscale-[30%]' : ''}`}>
-                                                <div 
-                                                    className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center cursor-pointer hover:bg-slate-100 transition-colors"
-                                                    onClick={() => toggleSet(collapsedAccounts, account.id, setCollapsedAccounts)}
-                                                >
+                                                <div className="p-4 bg-slate-50 flex justify-between items-center cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => { const s = new Set(collapsedAccounts); s.has(account.id) ? s.delete(account.id) : s.add(account.id); setCollapsedAccounts(s); }}>
                                                     <div className="flex items-center gap-3">
                                                         <div className="text-slate-400">{isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</div>
-                                                        <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100">{getAccountIcon(account.type)}</div>
+                                                        <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100"><Building2 className="w-5 h-5 text-indigo-500" /></div>
                                                         <div>
                                                             <div className="flex items-center gap-2">
                                                                 <h3 className="font-bold text-slate-900">{account.name}</h3>
-                                                                <button onClick={(e) => { e.stopPropagation(); toggleSet(hiddenAccounts, account.id, setHiddenAccounts); }} className="text-slate-300 hover:text-slate-500">
+                                                                <button onClick={(e) => { e.stopPropagation(); const s = new Set(hiddenAccounts); s.has(account.id) ? s.delete(account.id) : s.add(account.id); setHiddenAccounts(s); }} className="text-slate-300 hover:text-slate-500">
                                                                     {isAccHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4 opacity-0 group-hover:opacity-100" />}
                                                                 </button>
                                                             </div>
@@ -1053,67 +948,40 @@ export default function App() {
                                                     <div className="flex items-center gap-4">
                                                         <div className="text-right">
                                                             <p className="font-bold text-slate-900 text-lg">{totalHidden ? '********' : formatCurrency(accCurrentUSD)}</p>
-                                                            {!totalHidden && accPnL.percent !== 0 && <div className="flex justify-end mt-1"><PnLBadge pnlPercent={accPnL.percent} /></div>}
                                                         </div>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteAccount(port.id, account.id); }} className="text-slate-300 hover:text-red-500 transition-colors p-2"><Trash2 className="w-5 h-5" /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setPortfolios(portfolios.map(p => p.id === port.id ? { ...p, accounts: p.accounts.filter(a => a.id !== account.id) } : p)); }} className="text-slate-300 hover:text-red-500 transition-colors p-2"><Trash2 className="w-5 h-5" /></button>
                                                     </div>
                                                 </div>
                                                 
                                                 {!isCollapsed && (
-                                                    <div className="p-4 bg-white">
+                                                    <div className="p-4 bg-white border-t border-slate-100">
                                                         {account.assets.length === 0 ? <p className="text-sm text-slate-400 text-center py-4">Sin activos.</p> : (
                                                             <div className="space-y-2">
                                                                 {account.assets.map(asset => {
                                                                     const currentUSD = getAssetValueUSD(asset);
-                                                                    const investedUSD = getAssetInvestedUSD(asset);
-                                                                    const assetPnL = calculatePnL(currentUSD, investedUSD);
                                                                     const totalAmt = getAssetTotalAmount(asset);
-                                                                    const yieldAmt = getAssetYieldAmount(asset);
-                                                                    
-                                                                    const pricePerUnit = totalAmt > 0 ? (currentUSD / totalAmt) : 0;
-                                                                    const isStableOrFiat = ['USD', 'USDT', 'USDC', 'DAI', 'EUR', 'BRL', 'ARS'].includes(asset.symbol.toUpperCase());
-
                                                                     return (
                                                                         <div key={asset.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl transition-colors border border-slate-100 group">
                                                                             <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setSelectedAsset({ portfolioId: port.id, accountId: account.id, assetId: asset.id })}>
-                                                                                <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center font-bold text-white text-xs shadow-sm">
-                                                                                    {asset.symbol.substring(0, 4)}
-                                                                                </div>
+                                                                                <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center font-bold text-white text-xs shadow-sm">{asset.symbol.substring(0, 4)}</div>
                                                                                 <div>
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <p className="font-bold text-slate-900 uppercase group-hover:text-blue-600 transition-colors">{asset.symbol}</p>
-                                                                                        {asset.assetType && asset.assetType !== 'crypto' && (
-                                                                                            <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-semibold">
-                                                                                                {asset.assetType.replace('_',' ')}
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                                                                                        {totalHidden ? '***' : totalAmt.toFixed(4)} unidades 
-                                                                                        {yieldAmt > 0 && !totalHidden && <span className="text-green-600 font-bold ml-1">(+{yieldAmt.toFixed(4)} APY)</span>}
-                                                                                    </p>
+                                                                                    <div className="flex items-center gap-2"><p className="font-bold text-slate-900 uppercase group-hover:text-blue-600 transition-colors">{asset.symbol}</p></div>
+                                                                                    <p className="text-xs text-slate-500 mt-0.5">{totalHidden ? '***' : totalAmt.toFixed(4)} {t.assetsUnits}</p>
                                                                                 </div>
                                                                             </div>
                                                                             <div className="flex items-center gap-4">
                                                                                 <div className="text-right cursor-pointer" onClick={() => setSelectedAsset({ portfolioId: port.id, accountId: account.id, assetId: asset.id })}>
                                                                                     <p className="font-bold text-slate-900">{totalHidden ? '********' : formatCurrency(currentUSD)}</p>
-                                                                                    <div className="flex items-center justify-end gap-2 mt-1">
-                                                                                        {!isStableOrFiat && !totalHidden && <span className="text-xs text-slate-400">{formatCurrency(pricePerUnit, 'USD')} c/u</span>}
-                                                                                        {!totalHidden && Math.abs(assetPnL.percent) > 0.01 && <PnLBadge pnlPercent={assetPnL.percent} />}
-                                                                                    </div>
                                                                                 </div>
-                                                                                <button onClick={() => handleDeleteAsset(port.id, account.id, asset.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2"><Trash2 className="w-4 h-4" /></button>
+                                                                                <button onClick={() => setPortfolios(portfolios.map(p => p.id === port.id ? { ...p, accounts: p.accounts.map(acc => acc.id === account.id ? { ...acc, assets: acc.assets.filter(a => a.id !== asset.id) } : acc) } : p))} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2"><Trash2 className="w-4 h-4" /></button>
                                                                             </div>
                                                                         </div>
                                                                     )
                                                                 })}
                                                             </div>
                                                         )}
-                                                        <button 
-                                                            onClick={() => setIsAddingAsset({ active: true, portfolioId: port.id, accountId: account.id })}
-                                                            className="mt-3 w-full py-2.5 border-2 border-dashed border-slate-200 text-slate-600 rounded-xl hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-2 text-sm font-bold bg-slate-50/50 hover:bg-blue-50/50"
-                                                        >
-                                                            <Plus className="w-4 h-4" /> Añadir Activo a {account.name}
+                                                        <button onClick={() => setIsAddingAsset({ active: true, portfolioId: port.id, accountId: account.id })} className="mt-3 w-full py-2.5 border-2 border-dashed border-slate-200 text-slate-600 rounded-xl hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-2 text-sm font-bold bg-slate-50/50 hover:bg-blue-50/50">
+                                                            <Plus className="w-4 h-4" /> {t.addAsset}
                                                         </button>
                                                     </div>
                                                 )}
@@ -1126,19 +994,14 @@ export default function App() {
                     </div>
                 </div>
 
+                {/* MODALES REUTILIZADOS (Añadir Cartera, Cuenta, Activo) */}
                 {isAddingPortfolio && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-                            <div className="p-5 border-b border-slate-100"><h3 className="text-lg font-bold">Nueva Cartera</h3></div>
-                            <form onSubmit={handleAddPortfolio} className="p-5 space-y-4">
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Nombre de Cartera</label>
-                                    <input type="text" autoFocus required value={newPortfolioName} onChange={(e) => setNewPortfolioName(e.target.value)} className="w-full px-4 py-2 border rounded-xl outline-none" placeholder="Ej: Ahorros Largo Plazo"/>
-                                </div>
-                                <div className="flex gap-3 pt-2">
-                                    <button type="button" onClick={() => setIsAddingPortfolio(false)} className="flex-1 px-4 py-2 bg-slate-100 rounded-xl font-bold">Cancelar</button>
-                                    <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold">Crear</button>
-                                </div>
+                            <div className="p-5 border-b border-slate-100"><h3 className="text-lg font-bold text-slate-900">{t.newPortfolio}</h3></div>
+                            <form onSubmit={(e) => { e.preventDefault(); if(newPortfolioName.trim()){ setPortfolios([...portfolios, { id: Date.now().toString(), name: newPortfolioName, accounts: [] }]); setNewPortfolioName(''); setIsAddingPortfolio(false); setActivePortfolioId(Date.now().toString()); } }} className="p-5 space-y-4">
+                                <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.name}</label><InputField type="text" autoFocus required value={newPortfolioName} onChange={(e) => setNewPortfolioName(e.target.value)} placeholder="Ej: Ahorros Largo Plazo"/></div>
+                                <div className="flex gap-3 pt-2"><button type="button" onClick={() => setIsAddingPortfolio(false)} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-700">{t.cancel}</button><button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold">{t.create}</button></div>
                             </form>
                         </div>
                     </div>
@@ -1147,37 +1010,12 @@ export default function App() {
                 {isAddingAccount && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-                            <div className="p-6 border-b border-slate-100"><h3 className="text-xl font-bold">Añadir Nueva Entidad</h3></div>
-                            <form onSubmit={handleAddAccount} className="p-6 space-y-4">
-                                {portfolios.length > 1 && (
-                                    <div>
-                                        <label className="block text-sm font-bold mb-1">Cartera Destino</label>
-                                        <select value={newAccount.portfolioId} onChange={(e) => setNewAccount({...newAccount, portfolioId: e.target.value})} className="w-full px-4 py-3 border rounded-xl outline-none">
-                                            {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                        </select>
-                                    </div>
-                                )}
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Nombre (Ej: Binance, Santander)</label>
-                                    <input type="text" required value={newAccount.name} onChange={(e) => setNewAccount({...newAccount, name: e.target.value})} className="w-full px-4 py-3 border rounded-xl outline-none"/>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Tipo de Entidad</label>
-                                    <select value={newAccount.type} onChange={(e) => setNewAccount({...newAccount, type: e.target.value})} className="w-full px-4 py-3 border rounded-xl outline-none">
-                                        <option value="crypto_exchange">Exchange Cripto</option>
-                                        <option value="broker_global">Broker Internacional</option>
-                                        <option value="broker_ar">Broker Argentino</option>
-                                        <option value="bank_us">Banco EE.UU.</option>
-                                        <option value="bank_eu">Banco Europeo</option>
-                                        <option value="bank_br">Banco Brasileño</option>
-                                        <option value="bank_ar">Banco Argentino</option>
-                                        <option value="wallet">Billetera Virtual</option>
-                                    </select>
-                                </div>
-                                <div className="flex gap-3 pt-4">
-                                    <button type="button" onClick={() => setIsAddingAccount(false)} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold">Cancelar</button>
-                                    <button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold">Guardar</button>
-                                </div>
+                            <div className="p-6 border-b border-slate-100"><h3 className="text-xl font-bold text-slate-900">{t.addAccount}</h3></div>
+                            <form onSubmit={(e) => { e.preventDefault(); if(newAccount.name.trim()){ const tId = newAccount.portfolioId || (portfolios[0]?.id); setPortfolios(portfolios.map(p => p.id === tId ? { ...p, accounts: [...p.accounts, { id: Date.now().toString(), name: newAccount.name, type: newAccount.type, assets: [] }] } : p)); setNewAccount({ name: '', type: 'crypto_exchange', portfolioId: '' }); setIsAddingAccount(false); } }} className="p-6 space-y-4">
+                                {portfolios.length > 1 && <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.destinationPortfolio}</label><SelectField value={newAccount.portfolioId} onChange={(e) => setNewAccount({...newAccount, portfolioId: e.target.value})}>{portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</SelectField></div>}
+                                <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.name}</label><InputField type="text" required value={newAccount.name} onChange={(e) => setNewAccount({...newAccount, name: e.target.value})} placeholder="Ej: Binance"/></div>
+                                <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.type}</label><SelectField value={newAccount.type} onChange={(e) => setNewAccount({...newAccount, type: e.target.value})}><option value="crypto_exchange">Exchange Cripto</option><option value="broker_global">Broker Internacional</option><option value="broker_ar">Broker Argentino</option><option value="bank_us">Banco EE.UU.</option><option value="bank_eu">Banco Europeo</option><option value="bank_br">Banco Brasileño</option><option value="bank_ar">Banco Argentino</option><option value="wallet">Billetera Virtual</option></SelectField></div>
+                                <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsAddingAccount(false)} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-700">{t.cancel}</button><button type="submit" className="flex-1 px-4 py-3 bg-slate-900 text-white rounded-xl font-bold">{t.save}</button></div>
                             </form>
                         </div>
                     </div>
@@ -1186,67 +1024,21 @@ export default function App() {
                 {isAddingAsset.active && (() => {
                     const targetAcc = portfolios.find(p => p.id === isAddingAsset.portfolioId)?.accounts.find(a => a.id === isAddingAsset.accountId);
                     const isArBroker = targetAcc?.type === 'broker_ar';
-                    
                     return (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto">
-                            <div className="p-6 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
-                                <h3 className="text-xl font-bold">Añadir Activo a {targetAcc?.name}</h3>
-                            </div>
-                            <form onSubmit={handleAddAsset} className="p-6 space-y-4">
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Tipo de Activo</label>
-                                    <select value={newAsset.assetType} onChange={(e) => setNewAsset({...newAsset, assetType: e.target.value})} className="w-full px-4 py-3 border rounded-xl outline-none bg-white">
-                                        {isArBroker ? (
-                                            <>
-                                                <option value="cedear_ar">CEDEAR / ETF Argentino</option>
-                                                <option value="accion_ar">Acción Local (Merval)</option>
-                                                <option value="bono_ar">Bono Argentino</option>
-                                                <option value="on_ar">Obligación Negociable (ON)</option>
-                                                <option value="letra_ar">Letra del Tesoro</option>
-                                                <option value="caucion_ar">Caución (AR$)</option>
-                                                <option value="fci_ar">Fondo Común de Inversión (FCI)</option>
-                                                <option value="fiat">Saldos Liquidos (Fiat)</option>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <option value="crypto">Criptomoneda</option>
-                                                <option value="tokenized_stock">Acción Tokenizada (Crypto)</option>
-                                                <option value="stock_global">Acción / ETF Global</option>
-                                                <option value="fiat">Moneda Fiat</option>
-                                                <option value="manual">Valor Manual en USD</option>
-                                            </>
-                                        )}
-                                    </select>
-                                </div>
+                            <div className="p-6 border-b border-slate-100 bg-slate-50 sticky top-0 z-10"><h3 className="text-xl font-bold text-slate-900">{t.addAsset}</h3></div>
+                            <form onSubmit={(e) => { e.preventDefault(); if (newAsset.symbol && newAsset.amount) { const tx = { id: Date.now().toString(), type: 'buy', amount: newAsset.amount, price: newAsset.purchasePrice || 0, date: newAsset.purchaseDate || new Date().toISOString().split('T')[0] }; setPortfolios(portfolios.map(p => p.id === isAddingAsset.portfolioId ? { ...p, accounts: p.accounts.map(acc => acc.id === isAddingAsset.accountId ? { ...acc, assets: [...acc.assets, { ...newAsset, id: Date.now().toString(), transactions: [tx] }] } : acc) } : p)); setNewAsset({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' }); setIsAddingAsset({ active: false, portfolioId: null, accountId: null }); } }} className="p-6 space-y-4">
+                                <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.type}</label><SelectField value={newAsset.assetType} onChange={(e) => setNewAsset({...newAsset, assetType: e.target.value})}>{isArBroker ? <><option value="cedear_ar">CEDEAR</option><option value="accion_ar">Acción Local</option><option value="bono_ar">Bono</option><option value="on_ar">ON</option><option value="fiat">Saldos Liquidos</option></> : <><option value="crypto">Cripto</option><option value="stock_global">Acción Global</option><option value="fiat">Fiat</option></>}</SelectField></div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-bold mb-1">Símbolo/Ticker</label>
-                                        <input type="text" required value={newAsset.symbol} onChange={handleSymbolChange} placeholder="Ej: BTC, AAPL, AL30" className="w-full px-4 py-3 border rounded-xl outline-none uppercase"/>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-bold mb-1">Cantidad Inicial</label>
-                                        <input type="number" step="any" required min="0" value={newAsset.amount} onChange={(e) => setNewAsset({...newAsset, amount: e.target.value})} placeholder="Ej: 0.5" className="w-full px-4 py-3 border rounded-xl outline-none"/>
-                                    </div>
+                                    <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.symbol}</label><InputField type="text" required value={newAsset.symbol} onChange={(e) => setNewAsset({ ...newAsset, symbol: e.target.value.toUpperCase() })} placeholder="Ej: BTC" className="uppercase"/></div>
+                                    <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.amount}</label><InputField type="number" step="any" required min="0" value={newAsset.amount} onChange={(e) => setNewAsset({...newAsset, amount: e.target.value})} placeholder="Ej: 0.5"/></div>
                                 </div>
-                                
-                                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 space-y-3">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Fecha de Compra (Opcional)</label>
-                                        <input type="date" value={newAsset.purchaseDate} onChange={(e) => { setNewAsset({...newAsset, purchaseDate: e.target.value}); fetchHistoricalPrice(newAsset.symbol, newAsset.assetType, e.target.value); }} className="w-full px-4 py-2 border rounded-lg text-sm bg-white outline-none"/>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1 flex justify-between">
-                                            <span>Precio de Compra USD (Opcional)</span>{isFetchingHistory && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
-                                        </label>
-                                        <input type="number" step="any" min="0" value={newAsset.purchasePrice} onChange={(e) => setNewAsset({...newAsset, purchasePrice: e.target.value})} className="w-full px-4 py-2 border rounded-lg text-sm bg-white outline-none"/>
-                                    </div>
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                                    <div><label className="block text-sm font-medium mb-1 text-slate-700">{t.purchaseDate}</label><InputField type="date" value={newAsset.purchaseDate} onChange={(e) => { setNewAsset({...newAsset, purchaseDate: e.target.value}); setIsFetchingHistory(true); fetchHistoricalPrice(newAsset.symbol, newAsset.assetType, e.target.value).then(() => setIsFetchingHistory(false)); }}/></div>
+                                    <div><label className="block text-sm font-medium mb-1 text-slate-700 flex justify-between"><span>{t.purchasePrice}</span>{isFetchingHistory && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}</label><InputField type="number" step="any" min="0" value={newAsset.purchasePrice} onChange={(e) => setNewAsset({...newAsset, purchasePrice: e.target.value})}/></div>
                                 </div>
-
-                                <div className="flex gap-3 pt-2">
-                                    <button type="button" onClick={() => setIsAddingAsset({ active: false })} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold">Cancelar</button>
-                                    <button type="submit" className="flex-1 px-4 py-3 bg-slate-900 text-white rounded-xl font-bold">Añadir Activo</button>
-                                </div>
+                                <div className="flex gap-3 pt-2"><button type="button" onClick={() => setIsAddingAsset({ active: false })} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-700">{t.cancel}</button><button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold">{t.addAsset}</button></div>
                             </form>
                         </div>
                     </div>
@@ -1257,14 +1049,7 @@ export default function App() {
                     const acc = port?.accounts.find(a => a.id === selectedAsset.accountId);
                     const asset = acc?.assets.find(a => a.id === selectedAsset.assetId);
                     if (!asset) return null;
-                    return (
-                        <AssetDetailsModal 
-                            asset={asset}
-                            onClose={() => setSelectedAsset(null)}
-                            onUpdateApy={handleUpdateApy}
-                            onAddTransaction={handleAddTransaction}
-                        />
-                    )
+                    return <AssetDetailsModal asset={asset} lang={lang} onClose={() => setSelectedAsset(null)} onUpdateApy={(apy, date) => setPortfolios(prev => prev.map(p => p.id === selectedAsset.portfolioId ? { ...p, accounts: p.accounts.map(a => a.id === selectedAsset.accountId ? { ...a, assets: a.assets.map(as => as.id === selectedAsset.assetId ? { ...as, apy: apy, apyStartDate: date } : as) } : a) } : p))} onAddTransaction={(tx) => setPortfolios(prev => prev.map(p => p.id === selectedAsset.portfolioId ? { ...p, accounts: p.accounts.map(a => a.id === selectedAsset.accountId ? { ...a, assets: a.assets.map(as => as.id === selectedAsset.assetId ? { ...as, amount: tx.type === 'buy' ? parseFloat(as.amount) + parseFloat(tx.amount) : Math.max(0, parseFloat(as.amount) - parseFloat(tx.amount)), transactions: [...(as.transactions || []), { ...tx, id: Date.now().toString() }].sort((A,B) => new Date(B.date) - new Date(A.date)) } : as) } : a) } : p))} />
                 })()}
 
             </div>

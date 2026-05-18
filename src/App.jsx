@@ -10,12 +10,13 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, L
 
 // --- CONFIGURACIÓN ESTRICTA DE BASE DE DATOS Y USUARIOS (FIREBASE) ---
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
-// Credenciales oficiales fijas de tu proyecto Firebase (Garantiza Sync en PC y Celular)
+// Credenciales oficiales de tu proyecto Firebase 'dikystar-investment'
+// CORREGIDO: Se cambia 'ZwPkkk' por la clave real 'ZwPKkk' (sensible a mayúsculas) extraída de tu captura de pantalla
 const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyDJEA-eT-3vGiZwPkkk6ixn88i75qwp-vY",
+    apiKey: "AIzaSyDJEA-eT-3vGiZwPKkk6ixn88i75qwp-vY",
     authDomain: "dikystar-investment.firebaseapp.com",
     projectId: "dikystar-investment",
     storageBucket: "dikystar-investment.firebasestorage.app",
@@ -23,10 +24,32 @@ const FIREBASE_CONFIG = {
     appId: "1:273717181133:web:e4a98b67474e1d84aec784"
 };
 
-// Inicialización blindada que previene duplicados y asegura el uso de tus credenciales
-const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Aislamiento estricto de entornos para evitar errores de API Key durante desarrollo en StackBlitz
+const isCanvasSandbox = typeof __initial_auth_token !== 'undefined' && __initial_auth_token;
+
+const getFirebaseConfig = () => {
+    if (isCanvasSandbox && typeof __firebase_config !== 'undefined' && __firebase_config) {
+        try { return JSON.parse(__firebase_config); } catch (e) {}
+    }
+    return FIREBASE_CONFIG;
+};
+
+const config = getFirebaseConfig();
+const isFirebaseConfigured = config && config.apiKey && config.apiKey !== "TU_API_KEY" && config.apiKey.startsWith("AIzaSy");
+let app, auth, db, appId;
+
+if (isFirebaseConfigured) {
+    try {
+        app = getApps().length === 0 ? initializeApp(config) : getApp();
+        auth = getAuth(app);
+        db = getFirestore(app);
+        const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'dikystar-main-app';
+        // Sanitizamos el appId eliminando barras diagonales para evitar errores de segmentos impares en la base de datos de Firebase
+        appId = rawAppId.replace(/\//g, '_');
+    } catch (e) {
+        console.error("Error inicializando Firebase:", e);
+    }
+}
 
 // --- DICCIONARIO DE IDIOMAS (ESPAÑOL / INGLÉS) ---
 const TRANSLATIONS = {
@@ -93,7 +116,7 @@ const TRANSLATIONS = {
         aiQuickMarkets: "Resumen de Mercados",
         assetsUnits: "unidades",
         tradingViewUrl: "https://es.tradingview.com/markets/",
-        aiSystemPrompt: "Eres DikyStar AI, un asesor financiero de élite. Ofrece análisis detallado que incluye análisis fundamental, técnico, identificación de patrones de precios y sugerencias de inversión basadas en el perfil de riesgo del inversor, condiciones macroeconómicas y cotizaciones en tiempo real."
+        aiSystemPrompt: "Eres DikyStar AI, un asesor financiero de élite. Ofrece análisis detallado que incluye análisis fundamental, técnico, identificación de patrones de precios y sugerencias de inversión basadas en el perfil de riesgo del inversor, condiciones macroeconómicas y cotizaciones en tiempo real de mercados."
     },
     en: {
         title: "investment",
@@ -1041,10 +1064,10 @@ export default function App() {
 
     // --- PANTALLA PRINCIPAL (DASHBOARD) ---
     return (
-        <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 animate-fade-in">
             <div className="max-w-6xl mx-auto space-y-6">
 
-                <header className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200 animate-fade-in">
+                <header className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                         <div className="flex items-center gap-4">
                             <div className="bg-slate-900 p-3 rounded-xl shadow-lg"><Activity className="w-8 h-8 text-blue-400" /></div>

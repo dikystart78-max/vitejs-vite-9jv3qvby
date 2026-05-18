@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
     Wallet, Building2, Bitcoin, Plus, Trash2, RefreshCw,
-    TrendingUp, Cloud, Loader2, Globe, Landmark, Eye, EyeOff, 
-    PieChart as PieChartIcon, ChevronDown, ChevronRight, Euro, 
-    Coins, Settings, ArrowUpRight, ArrowDownRight, Activity, 
-    LineChart as LineChartIcon, LogIn, UserPlus, LogOut, ExternalLink, ShieldAlert
+    TrendingUp, DollarSign, PiggyBank, Cloud, CloudOff,
+    Loader2, Globe, Landmark, Eye, EyeOff, PieChart as PieChartIcon,
+    ChevronDown, ChevronRight, Euro, Coins, Settings, ArrowUpRight, ArrowDownRight, Activity, 
+    LineChart as LineChartIcon, LogIn, UserPlus, LogOut, ExternalLink, ShieldAlert, Sparkles, Calendar, Newspaper, DollarSign as DollarIcon
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, AreaChart, Area, XAxis, YAxis } from 'recharts';
 
 // --- CONFIGURACIÓN DE BASE DE DATOS Y USUARIOS (FIREBASE) ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
-// Configuración de Firebase sincronizada de tu proyecto 'dikystar-investment'
+// Credenciales oficiales de tu proyecto Firebase 'dikystar-investment'
 const VERCEL_FIREBASE_CONFIG = {
     apiKey: "AIzaSyDJEA-eT-3vGiZwPkkk6ixn88i75qwp-vY",
     authDomain: "dikystar-investment.firebaseapp.com",
@@ -23,20 +23,30 @@ const VERCEL_FIREBASE_CONFIG = {
     appId: "1:273717181133:web:e4a98b67474e1d84aec784"
 };
 
+// Aislamiento estricto de entornos para evitar el error 'auth/api-key-not-valid'
+const isCanvasSandbox = typeof __initial_auth_token !== 'undefined' && __initial_auth_token;
+
 const getFirebaseConfig = () => {
-    if (typeof __firebase_config !== 'undefined') return JSON.parse(__firebase_config);
+    // Si estamos en el editor de StackBlitz, usamos OBLIGATORIAMENTE la config inyectada
+    if (isCanvasSandbox && typeof __firebase_config !== 'undefined' && __firebase_config) {
+        try { return JSON.parse(__firebase_config); } catch (e) {}
+    }
+    // En Vercel / Laptop / iPhone, usamos tus credenciales reales
     return VERCEL_FIREBASE_CONFIG;
 };
 
-const isFirebaseConfigured = getFirebaseConfig().apiKey !== "TU_API_KEY";
+const config = getFirebaseConfig();
+const isFirebaseConfigured = config && config.apiKey && config.apiKey !== "TU_API_KEY";
 let app, auth, db, appId;
 
 if (isFirebaseConfigured) {
     try {
-        app = initializeApp(getFirebaseConfig());
+        app = initializeApp(config);
         auth = getAuth(app);
         db = getFirestore(app);
-        appId = typeof __app_id !== 'undefined' ? __app_id : 'dikystar-main-app';
+        const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'dikystar-main-app';
+        // Sanitizamos el appId eliminando barras diagonales para evitar errores de segmentos impares en la base de datos de Firebase
+        appId = rawAppId.replace(/\//g, '_');
     } catch (e) {
         console.error("Error inicializando Firebase:", e);
     }
@@ -58,7 +68,7 @@ const TRANSLATIONS = {
         savingCloud: "Guardando en la nube...",
         savingLocal: "Modo Local (Guardando en PC)",
         totalWealth: "Patrimonio Total",
-        tradingView: "TradingView",
+        tradingView: "Mercados TradingView",
         allPortfolios: "Todas las Carteras",
         newPortfolio: "Nueva Cartera",
         distribution: "Distribución",
@@ -67,7 +77,6 @@ const TRANSLATIONS = {
         emptyPortfolio: "Cartera vacía",
         emptyPortfolioDesc: "Comienza creando una Cartera y añadiendo cuentas.",
         noAccounts: "Sin cuentas en esta cartera.",
-        assetsUnits: "uds.",
         addAsset: "Añadir Activo",
         cancel: "Cancelar",
         create: "Crear",
@@ -97,7 +106,21 @@ const TRANSLATIONS = {
         bluechips: "Bluechips",
         blockchains: "Cripto Redes",
         altcoins: "Altcoins",
-        other: "Otros"
+        other: "Otros",
+        aiAdvisor: "Asesor IA",
+        aiTitle: "DikyStar Inteligencia Artificial",
+        aiTabAnalysis: "Análisis & Sugerencias",
+        aiTabNews: "Noticias de Impacto",
+        aiTabCalendar: "Calendario Semanal",
+        aiTabQuotes: "Mercado en Vivo",
+        aiProfileLabel: "Perfil del Inversor",
+        aiProfileCons: "Conservador",
+        aiProfileMod: "Moderado",
+        aiProfileAgg: "Agresivo",
+        aiAnalyzeBtn: "Generar Análisis con IA",
+        aiLoadingText: "Analizando mercados globales...",
+        aiErrorMsg: "No se pudo conectar con el servidor de IA. Inténtalo de nuevo.",
+        aiSystemPrompt: "Eres un analista financiero de élite y asesor de inversiones de DikyStar Investment. Tu objetivo es dar sugerencias profesionales estructuradas, lógicas y sumamente útiles basadas en datos en tiempo real de búsqueda y el perfil del inversor. Si se solicita análisis de cartera, audita los activos proporcionados."
     },
     en: {
         title: "investment",
@@ -113,7 +136,7 @@ const TRANSLATIONS = {
         savingCloud: "Saving to cloud...",
         savingLocal: "Local Mode (Saving on PC)",
         totalWealth: "Total Wealth",
-        tradingView: "TradingView",
+        tradingView: "TradingView Markets",
         allPortfolios: "All Portfolios",
         newPortfolio: "New Portfolio",
         distribution: "Distribution",
@@ -122,7 +145,6 @@ const TRANSLATIONS = {
         emptyPortfolio: "Empty Portfolio",
         emptyPortfolioDesc: "Start by creating a Portfolio and adding accounts.",
         noAccounts: "No accounts in this portfolio.",
-        assetsUnits: "units",
         addAsset: "Add Asset",
         cancel: "Cancel",
         create: "Create",
@@ -152,7 +174,21 @@ const TRANSLATIONS = {
         bluechips: "Bluechips",
         blockchains: "Blockchains (L1/L2)",
         altcoins: "Altcoins",
-        other: "Others"
+        other: "Others",
+        aiAdvisor: "AI Advisor",
+        aiTitle: "DikyStar Artificial Intelligence",
+        aiTabAnalysis: "Analysis & Tips",
+        aiTabNews: "High-Impact News",
+        aiTabCalendar: "Weekly Calendar",
+        aiTabQuotes: "Live Market",
+        aiProfileLabel: "Investor Profile",
+        aiProfileCons: "Conservative",
+        aiProfileMod: "Moderate",
+        aiProfileAgg: "Aggressive",
+        aiAnalyzeBtn: "Generate AI Analysis",
+        aiLoadingText: "Analyzing global financial markets...",
+        aiErrorMsg: "Could not connect to the AI server. Please try again.",
+        aiSystemPrompt: "You are an elite financial analyst and investment advisor for DikyStar Investment. Your goal is to provide highly structured, logical, and extremely actionable investment suggestions based on real-time search data and the user's investor profile. Audited portfolio assets if provided."
     }
 };
 
@@ -171,8 +207,7 @@ const fetchWithFallbacks = async (url) => {
     const proxies = [
         `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
         `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+        `https://corsproxy.io/?${encodeURIComponent(url)}`
     ];
     for (let proxy of proxies) {
         try {
@@ -206,9 +241,15 @@ const fetchHistoricalData = async (symbol, assetType, tfLabel) => {
                 if (resProxy.ok) data = await resProxy.json();
             }
             if (data && Array.isArray(data)) data.forEach(k => dataPoints.push({ ts: parseInt(k[0]), price: parseFloat(k[4]) }));
-        } else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
+        } else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
             let ticker = sym;
-            if (assetType !== 'stock_global' && !ticker.endsWith('.BA')) ticker = `${ticker}.BA`;
+            // Sufijos automáticos para APIs de Yahoo Finance
+            if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType) && !ticker.endsWith('.BA')) {
+                ticker = `${ticker}.BA`;
+            } else if (assetType === 'stock_br' && !ticker.endsWith('.SA')) {
+                ticker = `${ticker}.SA`;
+            }
+
             const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=${tf.yahooRange}&interval=${tf.yahooInterval}`;
             const data = await fetchWithFallbacks(url);
             if (data && data?.chart?.result?.[0]) {
@@ -222,7 +263,6 @@ const fetchHistoricalData = async (symbol, assetType, tfLabel) => {
     return dataPoints;
 };
 
-// COMPONENTES REFORZADOS PARA MÓVIL (Fuerzan texto oscuro y fondo blanco estricto contra bugs de modo oscuro forzado)
 const InputField = (props) => (
     <input 
         {...props} 
@@ -257,6 +297,8 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang
     const [chartData, setChartData] = useState([]);
     const [isChartLoading, setIsChartLoading] = useState(false);
 
+    const isFiat = asset.assetType === 'fiat';
+
     const yieldAmount = React.useMemo(() => {
         if (!asset.apy || parseFloat(asset.apy) <= 0 || !asset.apyStartDate) return 0;
         const start = new Date(asset.apyStartDate).getTime();
@@ -286,7 +328,7 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang
                 <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                     <div>
                         <h3 className="text-lg font-bold text-slate-900">{t.addAsset}: {asset.symbol}</h3>
-                        <p className="text-sm text-slate-500">{t.amount}: {(parseFloat(asset.amount) + yieldAmount).toFixed(4)}</p>
+                        <p className="text-sm text-slate-500">{t.amount}: {(parseFloat(asset.amount) + yieldAmount).toFixed(isFiat ? 2 : 4)}</p>
                     </div>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-700 bg-slate-200 p-2 rounded-full transition-colors">{t.cancel}</button>
                 </div>
@@ -305,7 +347,7 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang
                             <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex justify-between items-center">
                                 <div>
                                     <p className="text-sm text-green-800 font-bold mb-1">{t.apyYield}</p>
-                                    <p className="text-3xl font-black text-green-600">+{yieldAmount.toFixed(4)} <span className="text-lg">{asset.symbol}</span></p>
+                                    <p className="text-3xl font-black text-green-600">+{yieldAmount.toFixed(isFiat ? 2 : 4)} <span className="text-lg">{asset.symbol}</span></p>
                                 </div>
                                 <Activity className="w-10 h-10 text-green-300" />
                             </div>
@@ -361,7 +403,7 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className={`text-sm font-bold ${tx.type === 'buy' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'buy' ? '+' : '-'}{parseFloat(tx.amount).toFixed(4)}</p>
+                                                    <p className={`text-sm font-bold ${tx.type === 'buy' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'buy' ? '+' : '-'}{parseFloat(tx.amount).toFixed(isFiat ? 2 : 4)}</p>
                                                     {parseFloat(tx.price) > 0 && <p className="text-xs text-slate-500">${parseFloat(tx.price).toFixed(2)} USD c/u</p>}
                                                 </div>
                                             </div>
@@ -427,13 +469,13 @@ const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang
 
 export default function App() {
     // --- ESTADO DE IDIOMA ---
-    const [lang, setLang] = useState('es'); // 'es' | 'en'
+    const [lang, setLang] = useState('es'); 
     const t = TRANSLATIONS[lang];
 
     // --- ESTADOS DE AUTENTICACIÓN Y NUBE ---
     const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
-    const [authMode, setAuthMode] = useState('login'); // login | register
+    const [authMode, setAuthMode] = useState('login'); 
     const [authEmail, setAuthEmail] = useState('');
     const [authPassword, setAuthPassword] = useState('');
     const [authError, setAuthError] = useState('');
@@ -470,165 +512,15 @@ export default function App() {
     const [newAsset, setNewAsset] = useState({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' });
     const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
-    // --- EFECTOS DE AUTENTICACIÓN ---
-    useEffect(() => {
-        if (!isFirebaseConfigured) { setAuthLoading(false); return; }
-        const unsubscribe = onAuthStateChanged(auth, (u) => {
-            setUser(u);
-            setAuthLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+    // --- ESTADOS DEL ASESOR DE IA ---
+    const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+    const [aiTab, setAiTab] = useState('analysis'); 
+    const [investorProfile, setInvestorProfile] = useState('moderate'); 
+    const [aiResponse, setAiResponse] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState('');
 
-    // --- CARGAR DATOS DESDE LOCAL STORAGE Y FIRESTORE ---
-    useEffect(() => {
-        const loadLocal = () => {
-            const local = localStorage.getItem('DikyStarPortfolios_v2');
-            if (local) {
-                try { setPortfolios(JSON.parse(local)); } catch (e) { console.error(e); }
-            }
-        };
-
-        if (!isFirebaseConfigured) {
-            loadLocal();
-            return;
-        }
-
-        if (!user) return;
-
-        const fetchData = async () => {
-            try {
-                setSyncStatus('syncing');
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists() && docSnap.data().portfolios) {
-                    setPortfolios(docSnap.data().portfolios);
-                } else {
-                    const local = localStorage.getItem('DikyStarPortfolios_v2');
-                    if (local) setPortfolios(JSON.parse(local));
-                }
-                setSyncStatus('synced');
-            } catch (e) { console.error("Error cargando de la nube", e); }
-        };
-        fetchData();
-    }, [user]);
-
-    // --- GUARDAR DATOS EN FIRESTORE Y LOCAL ---
-    useEffect(() => {
-        if (portfolios.length === 0) return;
-        
-        localStorage.setItem('DikyStarPortfolios_v2', JSON.stringify(portfolios));
-        updateAllPrices();
-
-        if (user && isFirebaseConfigured) {
-            const saveData = async () => {
-                setSyncStatus('syncing');
-                try {
-                    const docRef = doc(db, 'artifacts', appId, 'users', user.uid);
-                    await setDoc(docRef, { portfolios });
-                    setSyncStatus('synced');
-                } catch (e) { console.error("Error guardando en la nube", e); }
-            };
-            saveData();
-        }
-    }, [portfolios]);
-
-    useEffect(() => {
-        if (dashboardTab === 'evolution') {
-            loadGlobalChart();
-        }
-    }, [dashboardTab, globalChartTimeframe, activePortfolioId, user]);
-
-    // --- FUNCIONES DE AUTENTICACIÓN ---
-    const handleAuth = async (e) => {
-        e.preventDefault();
-        setAuthError('');
-        try {
-            if (authMode === 'login') await signInWithEmailAndPassword(auth, authEmail, authPassword);
-            else await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-        } catch (err) {
-            console.error("Firebase Auth Error:", err);
-            if (err.code === 'auth/operation-not-allowed') {
-                setAuthError(lang === 'es' ? '❌ Error: Debes habilitar "Correo/Contraseña" en la consola de Firebase (Sección Authentication).' : '❌ Error: You must enable "Email/Password" in Firebase Authentication.');
-            } else if (err.code === 'auth/weak-password') {
-                setAuthError(t.errorWeakPassword);
-            } else if (err.code === 'auth/email-already-in-use') {
-                setAuthError(t.errorEmailInUse);
-            } else if (err.code === 'auth/invalid-email') {
-                setAuthError(t.errorInvalidEmail);
-            } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-                setAuthError(t.errorCredentials);
-            } else {
-                setAuthError(`Error: ${err.message}`);
-            }
-        }
-    };
-
-    const handleLogout = () => {
-        if (auth) signOut(auth);
-        setUser(null);
-        setPortfolios([]);
-        localStorage.removeItem('DikyStarPortfolios_v2');
-    };
-
-    // --- RESTO DE FUNCIONES DEL SISTEMA ---
-    const loadGlobalChart = async () => {
-        if (portfolios.length === 0) return;
-        setIsGlobalChartLoading(true);
-        let allAssets = [];
-        portfolios.forEach(port => {
-            if (activePortfolioId === 'all' || port.id === activePortfolioId) {
-                port.accounts.forEach(acc => { acc.assets.forEach(asset => allAssets.push(asset)); });
-            }
-        });
-
-        const uniqueAssetsMap = {};
-        allAssets.forEach(a => {
-            if (!['manual', 'caucion_ar', 'fci_ar'].includes(a.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(a.symbol.toUpperCase())) {
-                uniqueAssetsMap[a.symbol.toUpperCase()] = a.assetType;
-            }
-        });
-
-        const historyMap = {}; 
-        for (const sym of Object.keys(uniqueAssetsMap)) historyMap[sym] = await fetchHistoricalData(sym, uniqueAssetsMap[sym], globalChartTimeframe);
-
-        const allTimestampsSet = new Set();
-        Object.values(historyMap).forEach(arr => arr.forEach(point => allTimestampsSet.add(point.ts)));
-        const sortedTs = Array.from(allTimestampsSet).sort((a,b) => a - b);
-
-        const aggregatedData = [];
-        const lastKnownPrices = {}; 
-
-        sortedTs.forEach(ts => {
-            Object.keys(historyMap).forEach(sym => {
-                const point = historyMap[sym].find(p => p.ts === ts);
-                if (point) lastKnownPrices[sym] = point.price;
-            });
-            let totalUSD = 0;
-            allAssets.forEach(asset => {
-                const sym = asset.symbol.toUpperCase();
-                const amt = parseFloat(asset.amount || 0) + (asset.apy ? (parseFloat(asset.amount) * (parseFloat(asset.apy)/100) * ((Date.now() - new Date(asset.apyStartDate).getTime())/(1000*60*60*24*365))) : 0);
-                
-                if (['USD', 'USDT', 'USDC', 'DAI'].includes(sym)) totalUSD += amt;
-                else if (sym === 'ARS') totalUSD += amt / (forexRates.ARS || 1000);
-                else if (sym === 'EUR') totalUSD += amt / (forexRates.EUR || 0.92);
-                else if (sym === 'BRL') totalUSD += amt / (forexRates.BRL || 5.15);
-                else if (['manual', 'caucion_ar'].includes(asset.assetType)) totalUSD += amt;
-                else if (lastKnownPrices[sym]) {
-                    let historicalPrice = lastKnownPrices[sym];
-                    if (['accion_ar', 'bono_ar', 'cedear_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) historicalPrice = historicalPrice / (forexRates.ARS || 1000);
-                    totalUSD += amt * historicalPrice;
-                } else if (asset.purchasePrice) totalUSD += amt * parseFloat(asset.purchasePrice);
-            });
-            aggregatedData.push({
-                date: new Date(ts).toLocaleDateString('es-AR', { month: 'short', day: 'numeric', hour: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined, minute: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined }),
-                price: totalUSD * (displayCurrency === 'USD' ? 1 : (forexRates[displayCurrency] || 1))
-            });
-        });
-        setGlobalChartData(aggregatedData);
-        setIsGlobalChartLoading(false);
-    };
-
+    // --- CÁLCULOS AUXILIARES ---
     const getCryptoCategory = (symbol) => {
         const s = symbol.toUpperCase();
         if (['USDT','USDC','DAI','FDUSD','TUSD'].includes(s)) return t.stablecoins;
@@ -660,31 +552,22 @@ export default function App() {
         return (amt > 0 ? cost / amt : parseFloat(asset.purchasePrice || 0)) > 0 ? getAssetTotalAmount(asset) * (amt > 0 ? cost / amt : parseFloat(asset.purchasePrice || 0)) : getAssetValueUSD(asset); 
     };
 
-    const updateAllPrices = async () => {
-        setIsLoadingPrices(true);
-        let nP = { ...marketPrices }, nR = { ...forexRates };
-        try { const r = await fetch('https://dolarapi.com/v1/dolares/blue'); if(r.ok) nR.ARS = (await r.json()).venta; } catch(e){}
-        try { const r = await fetch('https://open.er-api.com/v6/latest/USD'); if(r.ok) { const d = await r.json(); if(d?.rates){ nR.EUR = d.rates.EUR; nR.BRL = d.rates.BRL; } } } catch(e){}
-        setForexRates(nR);
-        let req = []; portfolios.forEach(p => p.accounts.forEach(a => a.assets.forEach(as => { if (!['manual', 'caucion_ar', 'fci_ar'].includes(as.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(as.symbol.toUpperCase())) req.push(as); })));
-        for (const a of req) {
-            const sym = a.symbol.toUpperCase();
-            try {
-                if (['crypto', 'tokenized_stock'].includes(a.assetType)) {
-                    let r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`);
-                    if(!r.ok) r = await fetch(`https://corsproxy.io/?${encodeURIComponent(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`)}`);
-                    if(r.ok) nP[sym] = parseFloat((await r.json()).price);
-                } else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(a.assetType)) {
-                    let tick = sym; if (a.assetType !== 'stock_global' && !tick.endsWith('.BA')) tick = `${tick}.BA`;
-                    const d = await fetchWithFallbacks(`https://query2.finance.yahoo.com/v8/finance/chart/${tick}?range=1d&interval=1d`);
-                    if(d?.chart?.result?.[0]?.meta?.regularMarketPrice) nP[sym] = a.assetType !== 'stock_global' ? d.chart.result[0].meta.regularMarketPrice / (nR.ARS || 1000) : d.chart.result[0].meta.regularMarketPrice;
-                }
-            } catch (e) {}
+    const getAccountIcon = (type) => {
+        switch(type) {
+            case 'crypto_exchange': return <Bitcoin className="w-5 h-5 text-orange-500" />;
+            case 'broker_global': return <Globe className="w-5 h-5 text-blue-500" />;
+            case 'broker_ar': return <TrendingUp className="w-5 h-5 text-indigo-500" />;
+            case 'broker_br': return <TrendingUp className="w-5 h-5 text-yellow-600" />;
+            case 'bank_us': return <Landmark className="w-5 h-5 text-emerald-500" />;
+            case 'bank_ar': return <Building2 className="w-5 h-5 text-cyan-500" />;
+            case 'bank_eu': return <Euro className="w-5 h-5 text-blue-600" />;
+            case 'bank_br': return <Building2 className="w-5 h-5 text-yellow-500" />;
+            case 'wallet': return <Wallet className="w-5 h-5 text-purple-500" />;
+            default: return <Wallet className="w-5 h-5 text-gray-500" />;
         }
-        setMarketPrices(nP); setIsLoadingPrices(false);
-        if (dashboardTab === 'evolution') loadGlobalChart();
     };
 
+    // --- CÁLCULO DE ESTADÍSTICAS GLOBALES ---
     const globalStats = portfolios.reduce((acc, port) => {
         if (activePortfolioId !== 'all' && port.id !== activePortfolioId) return acc;
         port.accounts.forEach(a => a.assets.forEach(as => { acc.current += getAssetValueUSD(as); acc.invested += getAssetInvestedUSD(as); }));
@@ -700,7 +583,7 @@ export default function App() {
                 let cat = t.other;
                 if (['crypto', 'tokenized_stock'].includes(asset.assetType)) cat = getCryptoCategory(asset.symbol);
                 else if (['USDT','USDC','DAI','FDUSD'].includes(asset.symbol.toUpperCase())) cat = t.stablecoins;
-                else if (['stock_global', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar', 'fci_ar'].includes(asset.assetType)) cat = 'Acciones/Bonos/Fondos';
+                else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar', 'fci_ar'].includes(asset.assetType)) cat = 'Acciones/Bonos/Fondos';
                 else if (asset.assetType === 'fiat') cat = 'Efectivo/Bancos';
                 else if (['manual', 'caucion_ar'].includes(asset.assetType)) cat = 'Renta Fija / Manual';
                 data[cat] = (data[cat] || 0) + value;
@@ -709,57 +592,493 @@ export default function App() {
         return Object.keys(data).map(key => ({ name: key, value: data[key] })).filter(i => i.value > 0);
     };
 
-    // --- PANTALLA DE INICIO DE SESIÓN / REGISTRO ---
-    if (!user && isFirebaseConfigured) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
-                {/* Selector de Idioma en Login */}
-                <div className="absolute top-4 right-4 flex gap-2">
-                    <button onClick={() => setLang('es')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'es' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ESP 🇪🇸</button>
-                    <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${lang === 'en' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border'}`}>ENG 🇬🇧</button>
-                </div>
+    const updateAllPrices = async () => {
+        setIsLoadingPrices(true);
+        let nP = { ...marketPrices }, nR = { ...forexRates };
+        try { const r = await fetch('https://dolarapi.com/v1/dolares/blue'); if(r.ok) nR.ARS = (await r.json()).venta; } catch(e){}
+        try { const r = await fetch('https://open.er-api.com/v6/latest/USD'); if(r.ok) { const d = await r.json(); if(d?.rates){ nR.EUR = d.rates.EUR; nR.BRL = d.rates.BRL; } } } catch(e){}
+        setForexRates(nR);
+        let req = []; portfolios.forEach(p => p.accounts.forEach(a => a.assets.forEach(as => { if (!['manual', 'caucion_ar', 'fci_ar'].includes(as.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(as.symbol.toUpperCase())) req.push(as); })));
+        
+        for (const asset of req) {
+            const sym = asset.symbol.toUpperCase();
+            try {
+                if (['crypto', 'tokenized_stock'].includes(asset.assetType)) {
+                    let r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`);
+                    if(!r.ok) r = await fetch(`https://corsproxy.io/?${encodeURIComponent(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`)}`);
+                    if(r.ok) nP[sym] = parseFloat((await r.json()).price);
+                } else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) {
+                    let ticker = sym; 
+                    if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(asset.assetType) && !ticker.endsWith('.BA')) {
+                        ticker = `${ticker}.BA`;
+                    } else if (asset.assetType === 'stock_br' && !ticker.endsWith('.SA')) {
+                        ticker = `${ticker}.SA`;
+                    }
+                    const d = await fetchWithFallbacks(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=1d&interval=1d`);
+                    if(d?.chart?.result?.[0]?.meta?.regularMarketPrice) {
+                        let rawPrice = d.chart.result[0].meta.regularMarketPrice;
+                        if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) rawPrice = rawPrice / (nR.ARS || 1000);
+                        if (asset.assetType === 'stock_br') rawPrice = rawPrice / (nR.BRL || 5.15);
+                        nP[sym] = rawPrice;
+                    }
+                }
+            } catch (e) {}
+        }
+        setMarketPrices(nP); setIsLoadingPrices(false);
+        if (dashboardTab === 'evolution') loadGlobalChart();
+    };
 
-                <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-100 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
-                    <div className="text-center mb-8">
-                        <div className="bg-slate-900 p-3 rounded-2xl shadow-lg inline-block mb-4"><Activity className="w-8 h-8 text-blue-400" /></div>
-                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">DikyStar<span className="text-blue-600"> {t.title}</span></h1>
-                        <p className="text-sm text-slate-500 mt-2 font-medium">{t.slogan}</p>
-                    </div>
+    // --- EFECTOS DE AUTENTICACIÓN ---
+    useEffect(() => {
+        // Si Firebase no está configurado de forma real con una clave API que comience con 'AIzaSy', evitamos arrancar los oyentes y el initAuth
+        if (!isFirebaseConfigured) {
+            setAuthLoading(false);
+            return;
+        }
+        
+        const initAuth = async () => {
+            try {
+                // Validación para evitar llamadas a la API de Firebase si hay tokens incorrectos del sandbox de StackBlitz
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token && __initial_auth_token.trim() !== "") {
+                    // Validar si la api key provista de Firebase es funcional antes de iniciar
+                    if (auth && auth.config && auth.config.apiKey && auth.config.apiKey.startsWith("AIzaSy")) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    }
+                }
+            } catch (e) {
+                console.error("Error durante initAuth de Firebase (Sandbox detectado):", e);
+            } finally {
+                setAuthLoading(false);
+            }
+        };
 
-                    {authError && <div className="mb-4 p-3 bg-red-50 text-red-600 border border-red-100 rounded-xl text-sm font-bold text-center">{authError}</div>}
+        initAuth();
+        
+        let unsubscribe = () => {};
+        if (auth) {
+            unsubscribe = onAuthStateChanged(auth, (u) => {
+                setUser(u);
+                setAuthLoading(false);
+            });
+        }
+        return () => unsubscribe();
+    }, []);
 
-                    <form onSubmit={handleAuth} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">{t.email}</label>
-                            <InputField type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="tu@correo.com" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">{t.password}</label>
-                            <InputField type="password" required minLength="6" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" />
-                        </div>
-                        <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-md transition-all">
-                            {authMode === 'login' ? <><LogIn className="w-5 h-5"/> {t.enter}</> : <><UserPlus className="w-5 h-5"/> {t.register}</>}
-                        </button>
-                    </form>
+    // --- CARGAR DATOS DESDE LOCAL STORAGE Y FIRESTORE ---
+    useEffect(() => {
+        const loadLocal = () => {
+            const local = localStorage.getItem('DikyStarPortfolios_v2');
+            if (local) {
+                try { setPortfolios(JSON.parse(local)); } catch (e) { console.error(e); }
+            }
+        };
 
-                    <div className="mt-6 text-center">
-                        <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }} className="text-sm text-slate-500 hover:text-blue-600 font-bold transition-colors">
-                            {authMode === 'login' ? t.noAccount : t.haveAccount}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+        if (!isFirebaseConfigured) {
+            loadLocal();
+            return;
+        }
 
-    // --- PANTALLA PRINCIPAL (DASHBOARD) ---
+        if (!user) {
+            loadLocal();
+            return;
+        }
+
+        const fetchData = async () => {
+            try {
+                setSyncStatus('syncing');
+                // MODIFICADO: Cambiamos a una ruta de documento segura con segmentos pares y sanos compatible con Rule 1 y appId sanitizada sin slashes
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'portfolios', 'user_data');
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists() && docSnap.data().portfolios) {
+                    setPortfolios(docSnap.data().portfolios);
+                } else {
+                    const local = localStorage.getItem('DikyStarPortfolios_v2');
+                    if (local) setPortfolios(JSON.parse(local));
+                }
+                setSyncStatus('synced');
+            } catch (e) { 
+                console.error("Error cargando de la nube", e);
+                loadLocal();
+            }
+        };
+        fetchData();
+    }, [user]);
+
+    // --- GUARDAR DATOS EN FIRESTORE Y LOCAL ---
+    useEffect(() => {
+        if (portfolios.length === 0) return;
+        
+        localStorage.setItem('DikyStarPortfolios_v2', JSON.stringify(portfolios));
+        updateAllPrices();
+
+        if (user && isFirebaseConfigured) {
+            const saveData = async () => {
+                setSyncStatus('syncing');
+                try {
+                    // MODIFICADO: Cambiamos a una ruta de documento segura con segmentos pares y sanos compatible con Rule 1 y appId sanitizada sin slashes
+                    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'portfolios', 'user_data');
+                    await setDoc(docRef, { portfolios });
+                    setSyncStatus('synced');
+                } catch (e) { console.error("Error guardando en la nube", e); }
+            };
+            saveData();
+        }
+    }, [portfolios]);
+
+    useEffect(() => {
+        if (dashboardTab === 'evolution') {
+            loadGlobalChart();
+        }
+    }, [dashboardTab, globalChartTimeframe, activePortfolioId, user]);
+
+    // --- FUNCIONES DE AUTENTICACIÓN ---
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        try {
+            if (authMode === 'login') await signInWithEmailAndPassword(auth, authEmail, authPassword);
+            else await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        } catch (err) {
+            console.error("Firebase Auth Error:", err);
+            if (err.code === 'auth/operation-not-allowed') {
+                setAuthError(lang === 'es' ? '❌ Error: Debes habilitar "Correo/Contraseña" en la consola de Firebase (Sección Authentication).' : '❌ Error: You must enable "Email/Password" in Firebase Authentication.');
+            } else if (err.code === 'auth/weak-password') {
+                setAuthError(t.errorWeakPassword);
+            } else if (err.code === 'auth/email-already-in-use') {
+                setAuthError(t.errorEmailInUse);
+            } else if (err.code === 'auth/invalid-email') {
+                setAuthError(t.errorInvalidEmail);
+            } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-api-key') {
+                setAuthError(t.errorCredentials);
+            } else {
+                setAuthError(`Error: ${err.message}`);
+            }
+        }
+    };
+
+    const handleLogout = () => {
+        if (auth) signOut(auth);
+        setUser(null);
+        setPortfolios([]);
+        localStorage.removeItem('DikyStarPortfolios_v2');
+    };
+
+    // --- EJECUTAR CONSULTA DE IA CON GEMINI & GROUNDING ---
+    const handleRunAiAnalysis = async (customTab = aiTab) => {
+        setAiLoading(true);
+        setAiError('');
+        setAiResponse('');
+
+        const apiKey = ""; 
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        // Obtener activos detallados para armar la pregunta
+        let assetsTextList = [];
+        portfolios.forEach(port => {
+            port.accounts.forEach(acc => {
+                acc.assets.forEach(as => {
+                    const val = getAssetValueUSD(as);
+                    assetsTextList.push(`- ${as.symbol}: ${parseFloat(as.amount).toFixed(4)} unidades (Valor aprox: $${val.toFixed(2)} USD, Tipo: ${as.assetType})`);
+                });
+            });
+        });
+
+        const assetsString = assetsTextList.length > 0 ? assetsTextList.join("\n") : "La cartera del usuario está actualmente vacía.";
+
+        // Personalización de la consulta según la pestaña activa
+        let promptText = "";
+        if (customTab === 'analysis') {
+            promptText = `
+            Audita y analiza esta cartera de inversión real y provee sugerencias:
+            - Perfil de riesgo seleccionado del Inversor: ${investorProfile.toUpperCase()}
+            - Divisa de visualización: ${displayCurrency}
+            - Composición de Activos cargados:
+            ${assetsString}
+
+            Por favor, elabora:
+            1. Un diagnóstico de Diversificación y distribución de riesgo.
+            2. Análisis fundamental y técnico simplificado de los activos principales que posee el usuario (identificando patrones recientes o zonas de soporte/resistencia importantes si corresponde).
+            3. Sugerencias de inversión personalizadas y directas que encajen estrictamente con su perfil (${investorProfile.toUpperCase()}) y con las condiciones macroeconómicas globales vigentes de esta semana.
+            `;
+        } else if (customTab === 'news') {
+            promptText = `
+            Busca y resume las 5 noticias financieras y macroeconómicas de hoy más importantes de forma global, en Estados Unidos, Europa y con un enfoque relevante en el mercado de Argentina. 
+            Sé sumamente conciso, estructurado, profesional y explica brevemente por qué estas noticias impactan a un inversor promedio de acciones, CEDEARs o criptomonedas.
+            `;
+        } else if (customTab === 'calendar') {
+            promptText = `
+            Busca y presenta de forma clara y formateada el calendario económico de esta semana con eventos macroeconómicos críticos internacionales (decisiones de tasas de interés de la FED, inflación CPI de EEUU, datos de empleo, reportes de ganancias corporativas clave, etc.). 
+            Para cada evento, indica: Fecha/Hora aproximada, País/Región, Evento, Impacto esperado (Bajo/Medio/Alto) y breve sugerencia de protección de cartera.
+            `;
+        } else if (customTab === 'quotes') {
+            promptText = `
+            Busca y provee las cotizaciones de mercado en tiempo real más importantes de hoy, incluyendo:
+            - Principales índices bursátiles globales (S&P 500, Nasdaq, Dow Jones) y locales (Merval de Argentina).
+            - Principales tipos de cambio de hoy en Argentina (Dólar oficial, Dólar Blue, Dólar MEP, Dólar CCL).
+            - Cotizaciones de monedas internacionales frente al dólar (Euro, Real Brasileño).
+            - Cotización en tiempo real de Bitcoin (BTC) y Ethereum (ETH).
+            Formatea los datos en una tabla limpia usando Markdown.
+            `;
+        }
+
+        // Estructura de payload oficial de Gemini con Google Search Grounding habilitado
+        const payload = {
+            contents: [{
+                parts: [{ text: promptText }]
+            }],
+            systemInstruction: {
+                parts: [{ text: t.aiSystemPrompt }]
+            },
+            tools: [{
+                "google_search": {} // Grounding activo para traer cotizaciones y noticias en tiempo real
+            }]
+        };
+
+        // Implementación con exponencial backoff para tolerancia a fallas de API
+        const delay = (ms) => new Promise(res => setTimeout(res, ms));
+        const backoffTimes = [1000, 2000, 4000, 8000, 16000];
+        let attempt = 0;
+        let success = false;
+
+        while (attempt < 5) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) {
+                        setAiResponse(text);
+                        success = true;
+                        break;
+                    }
+                }
+                attempt++;
+                await delay(backoffTimes[attempt - 1]);
+            } catch (e) {
+                attempt++;
+                if (attempt === 5) {
+                    setAiError(t.aiErrorMsg);
+                } else {
+                    await delay(backoffTimes[attempt - 1]);
+                }
+            }
+        }
+
+        if (!success && !aiError) {
+            setAiError(t.aiErrorMsg);
+        }
+        setAiLoading(false);
+    };
+
+    // Lanzar análisis cada vez que cambiamos de pestaña dentro del modal de IA
+    useEffect(() => {
+        if (isAiModalOpen) {
+            handleRunAiAnalysis(aiTab);
+        }
+    }, [aiTab, investorProfile, isAiModalOpen]);
+
+    // Función auxiliar para renderizar con formato estético los textos que retorna Gemini (Markdown)
+    const renderFormattedAiText = (rawText) => {
+        if (!rawText) return null;
+        
+        return rawText.split('\n').map((line, idx) => {
+            let processedLine = line;
+            let className = "text-slate-700 text-sm leading-relaxed mb-2.5";
+
+            if (line.startsWith('### ')) {
+                processedLine = line.replace('### ', '');
+                className = "text-md font-extrabold text-slate-900 mt-5 mb-3 flex items-center gap-2 border-b pb-1.5";
+            }
+            else if (line.startsWith('## ')) {
+                processedLine = line.replace('## ', '');
+                className = "text-lg font-black text-blue-900 mt-6 mb-3 flex items-center gap-2 border-b border-blue-100 pb-2";
+            }
+            else if (line.startsWith('# ')) {
+                processedLine = line.replace('# ', '');
+                className = "text-xl font-black text-slate-900 mt-7 mb-4";
+            }
+            else if (line.startsWith('- ') || line.startsWith('* ')) {
+                processedLine = "• " + line.substring(2);
+                className = "text-slate-700 text-sm pl-4 mb-2.5 list-disc";
+            }
+
+            const boldRegex = /\*\*(.*?)\*\*/g;
+            const parts = [];
+            let lastIndex = 0;
+            let match;
+
+            while ((match = boldRegex.exec(processedLine)) !== null) {
+                if (match.index > lastIndex) {
+                    parts.push(processedLine.substring(lastIndex, match.index));
+                }
+                parts.push(<strong key={match.index} className="font-extrabold text-slate-900 bg-blue-50/50 px-1 rounded">{match[1]}</strong>);
+                lastIndex = boldRegex.lastIndex;
+            }
+            if (lastIndex < processedLine.length) {
+                parts.push(processedLine.substring(lastIndex));
+            }
+
+            return (
+                <p key={idx} className={className}>
+                    {parts.length > 0 ? parts : processedLine}
+                </p>
+            );
+        });
+    };
+
+    // --- ACCIONES DE CARTERA ---
+    const handleAddPortfolio = (e) => {
+        e.preventDefault();
+        if (!newPortfolioName.trim()) return;
+        const newPort = { id: Date.now().toString(), name: newPortfolioName, accounts: [] };
+        setPortfolios([...portfolios, newPort]);
+        setNewPortfolioName('');
+        setIsAddingPortfolio(false);
+        setActivePortfolioId(newPort.id);
+    };
+
+    const handleAddAccount = (e) => {
+        e.preventDefault();
+        if (!newAccount.name.trim()) return;
+        const targetPortId = newAccount.portfolioId || (portfolios[0]?.id);
+        const account = { id: Date.now().toString(), name: newAccount.name, type: newAccount.type, assets: [] };
+        setPortfolios(portfolios.map(p => p.id === targetPortId ? { ...p, accounts: [...p.accounts, account] } : p));
+        setNewAccount({ name: '', type: 'crypto_exchange', portfolioId: '' });
+        setIsAddingAccount(false);
+    };
+
+    const handleDeleteAccount = (portId, accId) => setPortfolios(portfolios.map(p => p.id === portId ? { ...p, accounts: p.accounts.filter(a => a.id !== accId) } : p));
+
+    const handleSymbolChange = (e) => {
+        const sym = e.target.value.toUpperCase();
+        let newType = newAsset.assetType;
+        const targetAcc = portfolios.find(p => p.id === isAddingAsset.portfolioId)?.accounts.find(a => a.id === isAddingAsset.accountId);
+        if (targetAcc?.type === 'broker_ar') {
+            if (['AL30','GD30','AE38','AL29'].includes(sym)) newType = 'bono_ar';
+            else if (['YPFD','GGAL','PAMP','BMA','CEPU'].includes(sym)) newType = 'accion_ar';
+            else if (['SPY','QQQ','AAPL','MSFT','KO','AMZN'].includes(sym)) newType = 'cedear_ar';
+        } else if (targetAcc?.type === 'broker_br') {
+            newType = 'stock_br';
+        } else if (targetAcc?.type === 'crypto_exchange' && ['BTC','ETH','USDT','SOL'].includes(sym)) {
+            newType = 'crypto';
+        }
+        setNewAsset({ ...newAsset, symbol: sym, assetType: newType });
+    };
+
+    const handleAddAsset = (e) => {
+        e.preventDefault();
+        if (!newAsset.symbol || !newAsset.amount) return;
+        
+        const tx = { id: Date.now().toString(), type: 'buy', amount: newAsset.amount, price: newAsset.purchasePrice || 0, date: newAsset.purchaseDate || new Date().toISOString().split('T')[0] };
+        const assetObj = { ...newAsset, id: Date.now().toString(), transactions: [tx] };
+
+        setPortfolios(portfolios.map(p => p.id === isAddingAsset.portfolioId ? {
+            ...p, accounts: p.accounts.map(acc => acc.id === isAddingAsset.accountId ? {
+                ...acc, assets: [...acc.assets, assetObj]
+            } : acc)
+        } : p));
+        
+        setNewAsset({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' });
+        setIsAddingAsset({ active: false, portfolioId: null, accountId: null });
+    };
+
+    const handleDeleteAsset = (portId, accId, assetId) => {
+        setPortfolios(portfolios.map(p => p.id === portId ? {
+            ...p, accounts: p.accounts.map(acc => acc.id === accId ? {
+                ...acc, assets: acc.assets.filter(a => a.id !== assetId)
+            } : acc)
+        } : p));
+    };
+
+    const updateAssetInPortfolio = (portId, accId, asId, updater) => {
+        setPortfolios(prev => prev.map(p => p.id === portId ? {
+            ...p, accounts: p.accounts.map(a => a.id === accId ? {
+                ...a, assets: a.assets.map(as => as.id === asId ? updater(as) : as)
+            } : a)
+        } : p));
+    };
+
+    const handleUpdateApy = (apyVal, dateVal) => {
+        updateAssetInPortfolio(selectedAsset.portfolioId, selectedAsset.accountId, selectedAsset.assetId, (as) => ({
+            ...as, apy: apyVal, apyStartDate: dateVal
+        }));
+    };
+
+    const handleAddTransaction = (tx) => {
+        updateAssetInPortfolio(selectedAsset.portfolioId, selectedAsset.accountId, selectedAsset.assetId, (as) => {
+            const txAmt = parseFloat(tx.amount);
+            const newAmount = tx.type === 'buy' ? parseFloat(as.amount) + txAmt : Math.max(0, parseFloat(as.amount) - txAmt);
+            const newTx = { ...tx, id: Date.now().toString() };
+            return {
+                ...as, amount: newAmount, transactions: [...(as.transactions || []), newTx].sort((a,b) => new Date(b.date) - new Date(a.date))
+            };
+        });
+    };
+
+    const toggleSet = (set, id, setter) => {
+        const newSet = new Set(set);
+        newSet.has(id) ? newSet.delete(id) : newSet.add(id);
+        setter(newSet);
+    };
+
+    const fetchHistoricalPrice = async (symbol, assetType, dateStr) => {
+        if (!dateStr || !symbol) return;
+        setIsFetchingHistory(true);
+        try {
+            const timestamp = new Date(dateStr).getTime();
+            const sym = symbol.toUpperCase();
+
+            if (['crypto', 'tokenized_stock'].includes(assetType)) {
+                const targetUrl = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=1d&startTime=${timestamp}&limit=1`;
+                try {
+                    const res = await fetch(targetUrl);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.length > 0) setNewAsset(prev => ({ ...prev, purchasePrice: parseFloat(data[0][1]).toFixed(4) }));
+                    }
+                } catch (e) {
+                    const resProxy = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+                    if (resProxy.ok) {
+                        const data = await resProxy.json();
+                        if (data && data.length > 0) setNewAsset(prev => ({ ...prev, purchasePrice: parseFloat(data[0][1]).toFixed(4) }));
+                    }
+                }
+            } else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
+                let ticker = sym;
+                if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType) && !ticker.endsWith('.BA')) {
+                    ticker = `${ticker}.BA`;
+                } else if (assetType === 'stock_br' && !ticker.endsWith('.SA')) {
+                    ticker = `${ticker}.SA`;
+                }
+                const period1 = Math.floor(timestamp / 1000);
+                const period2 = period1 + 86400; 
+                const targetUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1d`;
+                
+                try {
+                    const parsed = await fetchWithFallbacks(targetUrl);
+                    if (parsed && parsed?.chart?.result?.[0]?.indicators?.quote?.[0]?.open?.[0]) {
+                        let rawPrice = parsed.chart.result[0].indicators.quote[0].open[0];
+                        if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) rawPrice = rawPrice / (forexRates.ARS || 1000); 
+                        if (assetType === 'stock_br') rawPrice = rawPrice / (forexRates.BRL || 5.15);
+                        setNewAsset(prev => ({ ...prev, purchasePrice: rawPrice.toFixed(2) }));
+                    }
+                } catch (e) {}
+            }
+        } catch (error) {}
+        setIsFetchingHistory(false);
+    };
+
+    // --- PANTALLA PRINCIPAL ---
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
             <div className="max-w-6xl mx-auto space-y-6">
                 
                 {/* Banner de Aviso: Modo Local (Si Firebase no está configurado) */}
-                {!isFirebaseConfigured && (
+                {(!isFirebaseConfigured || isCanvasSandbox) && (
                     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
                         <div className="flex items-center gap-3">
                             <div className="bg-amber-100 p-2 rounded-xl text-amber-700">
@@ -782,7 +1101,7 @@ export default function App() {
                                 <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 mt-1">
                                     {syncStatus === 'syncing' ? <Loader2 className="w-4 h-4 animate-spin text-blue-500" /> : <Cloud className="w-4 h-4 text-emerald-500" />}
                                     <span>
-                                        {!isFirebaseConfigured 
+                                        {(!isFirebaseConfigured || isCanvasSandbox)
                                             ? t.savingLocal 
                                             : syncStatus === 'syncing' 
                                                 ? t.savingCloud 
@@ -795,7 +1114,7 @@ export default function App() {
                                             <option value="USD">USD</option><option value="EUR">EUR</option><option value="BRL">BRL</option><option value="ARS">ARS</option>
                                         </select>
                                     </div>
-                                    {isFirebaseConfigured && user && (
+                                    {isFirebaseConfigured && user && !isCanvasSandbox && (
                                         <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 flex items-center gap-1 font-bold ml-2 bg-red-50 px-2 py-1 rounded-lg transition-colors">
                                             <LogOut className="w-3.5 h-3.5" /> {t.logout}
                                         </button>
@@ -811,9 +1130,14 @@ export default function App() {
                                 <button onClick={() => setLang('en')} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${lang === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>ENG 🇬🇧</button>
                             </div>
 
+                            {/* BOTÓN INTERACTIVO DEL ASESOR DE IA */}
+                            <button onClick={() => setIsAiModalOpen(true)} className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:from-violet-700 hover:to-indigo-700 transition-colors shadow-md border border-violet-500/20">
+                                <Sparkles className="w-5 h-5 text-yellow-300 animate-pulse" /> <span>{t.aiAdvisor}</span>
+                            </button>
+
                             {/* BOTÓN TRADINGVIEW PROFESIONAL */}
-                            <a href="https://es.tradingview.com/chart/" target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-md">
-                                <ExternalLink className="w-5 h-5 text-blue-400" /> <span>{t.tradingView}</span>
+                            <a href="https://es.tradingview.com/markets/" target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-md">
+                                <ExternalLink className="w-5 h-5 text-blue-400" /> <span className="hidden sm:inline">{t.tradingView}</span>
                             </a>
                             
                             <div className="flex items-center gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex-1 lg:flex-none">
@@ -934,7 +1258,7 @@ export default function App() {
                                                 <div className="p-4 bg-slate-50 flex justify-between items-center cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => { const s = new Set(collapsedAccounts); s.has(account.id) ? s.delete(account.id) : s.add(account.id); setCollapsedAccounts(s); }}>
                                                     <div className="flex items-center gap-3">
                                                         <div className="text-slate-400">{isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</div>
-                                                        <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100"><Building2 className="w-5 h-5 text-indigo-500" /></div>
+                                                        <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100">{getAccountIcon(account.type)}</div>
                                                         <div>
                                                             <div className="flex items-center gap-2">
                                                                 <h3 className="font-bold text-slate-900">{account.name}</h3>
@@ -949,7 +1273,7 @@ export default function App() {
                                                         <div className="text-right">
                                                             <p className="font-bold text-slate-900 text-lg">{totalHidden ? '********' : formatCurrency(accCurrentUSD)}</p>
                                                         </div>
-                                                        <button onClick={(e) => { e.stopPropagation(); setPortfolios(portfolios.map(p => p.id === port.id ? { ...p, accounts: p.accounts.filter(a => a.id !== account.id) } : p)); }} className="text-slate-300 hover:text-red-500 transition-colors p-2"><Trash2 className="w-5 h-5" /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteAccount(port.id, account.id); }} className="text-slate-300 hover:text-red-500 transition-colors p-2"><Trash2 className="w-5 h-5" /></button>
                                                     </div>
                                                 </div>
                                                 
@@ -960,20 +1284,28 @@ export default function App() {
                                                                 {account.assets.map(asset => {
                                                                     const currentUSD = getAssetValueUSD(asset);
                                                                     const totalAmt = getAssetTotalAmount(asset);
+                                                                    const isFiat = asset.assetType === 'fiat';
+                                                                    const yieldAmt = getAssetYieldAmount(asset);
+
                                                                     return (
                                                                         <div key={asset.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl transition-colors border border-slate-100 group">
                                                                             <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setSelectedAsset({ portfolioId: port.id, accountId: account.id, assetId: asset.id })}>
                                                                                 <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center font-bold text-white text-xs shadow-sm">{asset.symbol.substring(0, 4)}</div>
                                                                                 <div>
-                                                                                    <div className="flex items-center gap-2"><p className="font-bold text-slate-900 uppercase group-hover:text-blue-600 transition-colors">{asset.symbol}</p></div>
-                                                                                    <p className="text-xs text-slate-500 mt-0.5">{totalHidden ? '***' : totalAmt.toFixed(4)} {t.assetsUnits}</p>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <p className="font-bold text-slate-900 uppercase group-hover:text-blue-600 transition-colors">{asset.symbol}</p>
+                                                                                    </div>
+                                                                                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                                                                                        {totalHidden ? '***' : (isFiat ? totalAmt.toFixed(2) : totalAmt.toFixed(4))} {isFiat ? '' : t.assetsUnits}
+                                                                                        {yieldAmt > 0 && !totalHidden && <span className="text-green-600 font-bold ml-1">(+{isFiat ? yieldAmt.toFixed(2) : yieldAmt.toFixed(4)} APY)</span>}
+                                                                                    </p>
                                                                                 </div>
                                                                             </div>
                                                                             <div className="flex items-center gap-4">
                                                                                 <div className="text-right cursor-pointer" onClick={() => setSelectedAsset({ portfolioId: port.id, accountId: account.id, assetId: asset.id })}>
                                                                                     <p className="font-bold text-slate-900">{totalHidden ? '********' : formatCurrency(currentUSD)}</p>
                                                                                 </div>
-                                                                                <button onClick={() => setPortfolios(portfolios.map(p => p.id === port.id ? { ...p, accounts: p.accounts.map(acc => acc.id === account.id ? { ...acc, assets: acc.assets.filter(a => a.id !== asset.id) } : acc) } : p))} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2"><Trash2 className="w-4 h-4" /></button>
+                                                                                <button onClick={() => handleDeleteAsset(port.id, account.id, asset.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2"><Trash2 className="w-4 h-4" /></button>
                                                                             </div>
                                                                         </div>
                                                                     )
@@ -994,12 +1326,110 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* MODALES REUTILIZADOS (Añadir Cartera, Cuenta, Activo) */}
+                {/* MODAL DEL ASESOR DE INTELIGENCIA ARTIFICIAL */}
+                {isAiModalOpen && (
+                    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans animate-fade-in">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col border border-slate-100">
+                            
+                            <div className="p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex justify-between items-center relative">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-violet-600/30 p-2.5 rounded-2xl border border-violet-500/30">
+                                        <Sparkles className="w-7 h-7 text-yellow-300 animate-pulse" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-extrabold tracking-tight">{t.aiTitle}</h3>
+                                        <p className="text-xs text-indigo-200 font-medium">Gemini 2.5 Flash</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setIsAiModalOpen(false)} className="text-slate-300 hover:text-white bg-white/10 hover:bg-white/25 px-4 py-2 rounded-xl transition-all font-bold text-sm">
+                                    {t.cancel}
+                                </button>
+                            </div>
+
+                            <div className="flex border-b border-slate-100 bg-slate-50 overflow-x-auto scrollbar-hide">
+                                <button onClick={() => setAiTab('analysis')} className={`flex-1 py-3 px-4 font-bold text-sm whitespace-nowrap border-b-2 transition-all flex items-center justify-center gap-1.5 ${aiTab === 'analysis' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+                                    <Sparkles className="w-4 h-4" /> {t.aiTabAnalysis}
+                                </button>
+                                <button onClick={() => setAiTab('news')} className={`flex-1 py-3 px-4 font-bold text-sm whitespace-nowrap border-b-2 transition-all flex items-center justify-center gap-1.5 ${aiTab === 'news' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+                                    <Newspaper className="w-4 h-4" /> {t.aiTabNews}
+                                </button>
+                                <button onClick={() => setAiTab('calendar')} className={`flex-1 py-3 px-4 font-bold text-sm whitespace-nowrap border-b-2 transition-all flex items-center justify-center gap-1.5 ${aiTab === 'calendar' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+                                    <Calendar className="w-4 h-4" /> {t.aiTabCalendar}
+                                </button>
+                                <button onClick={() => setAiTab('quotes')} className={`flex-1 py-3 px-4 font-bold text-sm whitespace-nowrap border-b-2 transition-all flex items-center justify-center gap-1.5 ${aiTab === 'quotes' ? 'border-indigo-600 text-indigo-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+                                    <DollarIcon className="w-4 h-4" /> {t.aiTabQuotes}
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/50 flex flex-col gap-6">
+                                
+                                {aiTab === 'analysis' && (
+                                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-black text-slate-500 uppercase tracking-wider">{t.aiProfileLabel}</label>
+                                            <div className="flex gap-2 mt-1">
+                                                {['conservative', 'moderate', 'aggressive'].map(profile => (
+                                                    <button 
+                                                        key={profile} 
+                                                        onClick={() => setInvestorProfile(profile)} 
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${investorProfile === profile ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                                    >
+                                                        {profile === 'conservative' ? t.aiProfileCons : profile === 'moderate' ? t.aiProfileMod : t.aiProfileAgg}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleRunAiAnalysis()} 
+                                            disabled={aiLoading}
+                                            className="w-full sm:w-auto px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-colors"
+                                        >
+                                            <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} />
+                                            {t.aiAnalyzeBtn}
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="bg-white rounded-2xl border border-slate-200/80 p-6 md:p-8 shadow-sm flex-1 min-h-[350px] relative overflow-hidden">
+                                    {aiLoading ? (
+                                        <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center gap-4 z-20">
+                                            <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
+                                            <p className="text-sm font-bold text-slate-600 animate-pulse">{t.aiLoadingText}</p>
+                                        </div>
+                                    ) : null}
+
+                                    {aiError && (
+                                        <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-xl text-sm font-bold text-center mb-4">
+                                            {aiError}
+                                        </div>
+                                    )}
+
+                                    <div className="prose max-w-none text-slate-800">
+                                        {aiResponse ? (
+                                            <div className="space-y-1 animate-fade-in-up">
+                                                {renderFormattedAiText(aiResponse)}
+                                            </div>
+                                        ) : (
+                                            !aiLoading && (
+                                                <div className="h-full flex flex-col items-center justify-center text-center p-12 text-slate-400 gap-3">
+                                                    <Sparkles className="w-12 h-12 text-slate-300" />
+                                                    <p className="text-sm font-bold">Presiona el botón de arriba para iniciar el análisis en vivo.</p>
+                                                </div>
+                                            )
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODALES AÑADIR */}
                 {isAddingPortfolio && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
                             <div className="p-5 border-b border-slate-100"><h3 className="text-lg font-bold text-slate-900">{t.newPortfolio}</h3></div>
-                            <form onSubmit={(e) => { e.preventDefault(); if(newPortfolioName.trim()){ setPortfolios([...portfolios, { id: Date.now().toString(), name: newPortfolioName, accounts: [] }]); setNewPortfolioName(''); setIsAddingPortfolio(false); setActivePortfolioId(Date.now().toString()); } }} className="p-5 space-y-4">
+                            <form onSubmit={handleAddPortfolio} className="p-5 space-y-4">
                                 <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.name}</label><InputField type="text" autoFocus required value={newPortfolioName} onChange={(e) => setNewPortfolioName(e.target.value)} placeholder="Ej: Ahorros Largo Plazo"/></div>
                                 <div className="flex gap-3 pt-2"><button type="button" onClick={() => setIsAddingPortfolio(false)} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-700">{t.cancel}</button><button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold">{t.create}</button></div>
                             </form>
@@ -1011,11 +1441,11 @@ export default function App() {
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                             <div className="p-6 border-b border-slate-100"><h3 className="text-xl font-bold text-slate-900">{t.addAccount}</h3></div>
-                            <form onSubmit={(e) => { e.preventDefault(); if(newAccount.name.trim()){ const tId = newAccount.portfolioId || (portfolios[0]?.id); setPortfolios(portfolios.map(p => p.id === tId ? { ...p, accounts: [...p.accounts, { id: Date.now().toString(), name: newAccount.name, type: newAccount.type, assets: [] }] } : p)); setNewAccount({ name: '', type: 'crypto_exchange', portfolioId: '' }); setIsAddingAccount(false); } }} className="p-6 space-y-4">
+                            <form onSubmit={handleAddAccount} className="p-6 space-y-4">
                                 {portfolios.length > 1 && <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.destinationPortfolio}</label><SelectField value={newAccount.portfolioId} onChange={(e) => setNewAccount({...newAccount, portfolioId: e.target.value})}>{portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</SelectField></div>}
                                 <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.name}</label><InputField type="text" required value={newAccount.name} onChange={(e) => setNewAccount({...newAccount, name: e.target.value})} placeholder="Ej: Binance"/></div>
-                                <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.type}</label><SelectField value={newAccount.type} onChange={(e) => setNewAccount({...newAccount, type: e.target.value})}><option value="crypto_exchange">Exchange Cripto</option><option value="broker_global">Broker Internacional</option><option value="broker_ar">Broker Argentino</option><option value="bank_us">Banco EE.UU.</option><option value="bank_eu">Banco Europeo</option><option value="bank_br">Banco Brasileño</option><option value="bank_ar">Banco Argentino</option><option value="wallet">Billetera Virtual</option></SelectField></div>
-                                <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsAddingAccount(false)} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-700">{t.cancel}</button><button type="submit" className="flex-1 px-4 py-3 bg-slate-900 text-white rounded-xl font-bold">{t.save}</button></div>
+                                <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.type}</label><SelectField value={newAccount.type} onChange={(e) => setNewAccount({...newAccount, type: e.target.value})}><option value="crypto_exchange">Exchange Cripto</option><option value="broker_global">Broker Internacional</option><option value="broker_ar">Broker Argentino</option><option value="broker_br">Broker Brasileño</option><option value="bank_us">Banco EE.UU.</option><option value="bank_eu">Banco Europeo</option><option value="bank_br">Banco Brasileño</option><option value="bank_ar">Banco Argentino</option><option value="wallet">Billetera Virtual</option></SelectField></div>
+                                <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsAddingAccount(false)} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-700">{t.cancel}</button><button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold">{t.save}</button></div>
                             </form>
                         </div>
                     </div>
@@ -1024,14 +1454,23 @@ export default function App() {
                 {isAddingAsset.active && (() => {
                     const targetAcc = portfolios.find(p => p.id === isAddingAsset.portfolioId)?.accounts.find(a => a.id === isAddingAsset.accountId);
                     const isArBroker = targetAcc?.type === 'broker_ar';
+                    const isBrBroker = targetAcc?.type === 'broker_br';
                     return (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto">
                             <div className="p-6 border-b border-slate-100 bg-slate-50 sticky top-0 z-10"><h3 className="text-xl font-bold text-slate-900">{t.addAsset}</h3></div>
-                            <form onSubmit={(e) => { e.preventDefault(); if (newAsset.symbol && newAsset.amount) { const tx = { id: Date.now().toString(), type: 'buy', amount: newAsset.amount, price: newAsset.purchasePrice || 0, date: newAsset.purchaseDate || new Date().toISOString().split('T')[0] }; setPortfolios(portfolios.map(p => p.id === isAddingAsset.portfolioId ? { ...p, accounts: p.accounts.map(acc => acc.id === isAddingAsset.accountId ? { ...acc, assets: [...acc.assets, { ...newAsset, id: Date.now().toString(), transactions: [tx] }] } : acc) } : p)); setNewAsset({ symbol: '', amount: '', assetType: 'crypto', purchaseDate: '', purchasePrice: '' }); setIsAddingAsset({ active: false, portfolioId: null, accountId: null }); } }} className="p-6 space-y-4">
-                                <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.type}</label><SelectField value={newAsset.assetType} onChange={(e) => setNewAsset({...newAsset, assetType: e.target.value})}>{isArBroker ? <><option value="cedear_ar">CEDEAR</option><option value="accion_ar">Acción Local</option><option value="bono_ar">Bono</option><option value="on_ar">ON</option><option value="fiat">Saldos Liquidos</option></> : <><option value="crypto">Cripto</option><option value="stock_global">Acción Global</option><option value="fiat">Fiat</option></>}</SelectField></div>
+                            <form onSubmit={handleAddAsset} className="p-6 space-y-4">
+                                <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.type}</label><SelectField value={newAsset.assetType} onChange={(e) => setNewAsset({...newAsset, assetType: e.target.value})}>
+                                    {isArBroker ? (
+                                        <><option value="cedear_ar">CEDEAR / ETF Argentino</option><option value="accion_ar">Acción Local (Merval)</option><option value="bono_ar">Bono</option><option value="on_ar">ON</option><option value="letra_ar">Letra / T-Bill</option><option value="fci_ar">Fondo FCI</option><option value="caucion_ar">Caución AR$</option><option value="fiat">Saldos Liquidos</option></>
+                                    ) : isBrBroker ? (
+                                        <><option value="stock_br">Acción/FCI Brasil (.SA)</option><option value="fiat">Saldos Liquidos</option></>
+                                    ) : (
+                                        <><option value="crypto">Cripto</option><option value="stock_global">Acción Global</option><option value="fiat">Fiat</option><option value="manual">Manual (USD)</option></>
+                                    )}
+                                </SelectField></div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.symbol}</label><InputField type="text" required value={newAsset.symbol} onChange={(e) => setNewAsset({ ...newAsset, symbol: e.target.value.toUpperCase() })} placeholder="Ej: BTC" className="uppercase"/></div>
+                                    <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.symbol}</label><InputField type="text" required value={newAsset.symbol} onChange={handleSymbolChange} placeholder="Ej: AAPL" className="uppercase"/></div>
                                     <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.amount}</label><InputField type="number" step="any" required min="0" value={newAsset.amount} onChange={(e) => setNewAsset({...newAsset, amount: e.target.value})} placeholder="Ej: 0.5"/></div>
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
@@ -1049,7 +1488,7 @@ export default function App() {
                     const acc = port?.accounts.find(a => a.id === selectedAsset.accountId);
                     const asset = acc?.assets.find(a => a.id === selectedAsset.assetId);
                     if (!asset) return null;
-                    return <AssetDetailsModal asset={asset} lang={lang} onClose={() => setSelectedAsset(null)} onUpdateApy={(apy, date) => setPortfolios(prev => prev.map(p => p.id === selectedAsset.portfolioId ? { ...p, accounts: p.accounts.map(a => a.id === selectedAsset.accountId ? { ...a, assets: a.assets.map(as => as.id === selectedAsset.assetId ? { ...as, apy: apy, apyStartDate: date } : as) } : a) } : p))} onAddTransaction={(tx) => setPortfolios(prev => prev.map(p => p.id === selectedAsset.portfolioId ? { ...p, accounts: p.accounts.map(a => a.id === selectedAsset.accountId ? { ...a, assets: a.assets.map(as => as.id === selectedAsset.assetId ? { ...as, amount: tx.type === 'buy' ? parseFloat(as.amount) + parseFloat(tx.amount) : Math.max(0, parseFloat(as.amount) - parseFloat(tx.amount)), transactions: [...(as.transactions || []), { ...tx, id: Date.now().toString() }].sort((A,B) => new Date(B.date) - new Date(A.date)) } : as) } : a) } : p))} />
+                    return <AssetDetailsModal asset={asset} lang={lang} onClose={() => setSelectedAsset(null)} onUpdateApy={handleUpdateApy} onAddTransaction={handleAddTransaction} />
                 })()}
 
             </div>

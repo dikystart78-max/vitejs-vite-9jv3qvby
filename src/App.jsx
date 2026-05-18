@@ -2,16 +2,34 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     Wallet, Building2, Bitcoin, Plus, Trash2, RefreshCw,
     TrendingUp, DollarSign, PiggyBank, Cloud, CloudOff,
-    Loader2, Globe, Landmark, Eye, EyeOff, PieChart as PieChartIcon,
+    Loader2, Globe, Landmark, Eye, EyeOff, PieChart as LucidePieChart,
     ChevronDown, ChevronRight, Euro, Coins, Settings, ArrowUpRight, ArrowDownRight, Activity, 
-    LineChart as LineChartIcon, LogIn, UserPlus, LogOut, ExternalLink, ShieldAlert, Sparkles, Calendar, Newspaper, Send, User
+    LineChart as LucideLineChart, LogIn, UserPlus, LogOut, ExternalLink, ShieldAlert, Sparkles, Calendar, Newspaper, Send, User, Copy
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, AreaChart, Area, XAxis, YAxis } from 'recharts';
 
 // --- CONFIGURACIÓN ESTRICTA DE BASE DE DATOS Y USUARIOS (FIREBASE) ---
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+
+// Mapeo seguro de referencias para evitar colisiones de nombres con los componentes gráficos de Recharts
+const DollarIcon = DollarSign;
+const PieChartIcon = LucidePieChart;
+const LineChartIcon = LucideLineChart;
+
+// Paleta de colores para gráficos circulares y visualización de activos
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e'];
+
+// Rangos de tiempo globales para gráficos históricos
+const TIMEFRAMES = [
+    { label: '1D', range: '1d', binanceInterval: '5m', binanceLimit: 288, yahooRange: '1d', yahooInterval: '5m' },
+    { label: '5D', range: '5d', binanceInterval: '15m', binanceLimit: 480, yahooRange: '5d', yahooInterval: '15m' },
+    { label: '1M', range: '1mo', binanceInterval: '1d', binanceLimit: 30, yahooRange: '1mo', yahooInterval: '1d' },
+    { label: '6M', range: '6mo', binanceInterval: '1d', binanceLimit: 180, yahooRange: '6mo', yahooInterval: '1d' },
+    { label: '1A', range: '1y', binanceInterval: '1w', binanceLimit: 52, yahooRange: '1y', yahooInterval: '1wk' },
+    { label: '5A', range: '5y', binanceInterval: '1M', binanceLimit: 60, yahooRange: '5y', yahooInterval: '1mo' },
+];
 
 // Credenciales oficiales fijas de tu proyecto Firebase (Garantiza Sync en PC y Celular)
 const FIREBASE_CONFIG = {
@@ -162,7 +180,85 @@ const TRANSLATIONS = {
     }
 };
 
-// --- PURE HELPER FUNCTIONS DEFINIDOS FUERA DEL COMPONENTE (EVITA TDZ Y RE-CREACIONES) ---
+// --- COMPONENTES DE ENTRADA FIJOS CONTRA BUG DE NÚMEROS OSCUROS EN MÓVILES (DEFINIDOS EN ÁMBITO GLOBAL) ---
+const InputField = (props) => (
+    <input 
+        {...props} 
+        className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none shadow-sm focus:border-blue-500 text-slate-900 bg-white ${props.className || ''}`}
+        style={{ backgroundColor: '#ffffff', color: '#0f172a', colorScheme: 'light', ...props.style }}
+    />
+);
+
+const SelectField = (props) => (
+    <select 
+        {...props} 
+        className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none bg-white shadow-sm focus:border-blue-500 text-slate-900 ${props.className || ''}`}
+        style={{ backgroundColor: '#ffffff', color: '#0f172a', colorScheme: 'light', ...props.style }}
+    >
+        {props.children}
+    </select>
+);
+
+// --- PURE HELPER FUNCTIONS DEFINIDOS FUERA DEL COMPONENTE (EVITA ERRORES DE REFERENCEERROR) ---
+const fetchWithFallbacks = async (url) => {
+    const proxies = [
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        `https://corsproxy.io/?${encodeURIComponent(url)}`
+    ];
+    for (let proxy of proxies) {
+        try {
+            const res = await fetch(proxy);
+            if (res.ok) {
+                if (proxy.includes('/get?url=')) {
+                    const data = await res.json();
+                    if (data && data.contents) {
+                        try { return JSON.parse(data.contents); } catch (e) { return data.contents; }
+                    }
+                } else return await res.json();
+            }
+        } catch (e) {}
+    }
+    return null;
+};
+
+const fetchHistoricalData = async (symbol, assetType, tfLabel) => {
+    const tf = TIMEFRAMES.find(t => t.label === tfLabel) || TIMEFRAMES[2];
+    const sym = symbol.toUpperCase();
+    const dataPoints = [];
+    try {
+        if (['crypto', 'tokenized_stock'].includes(assetType)) {
+            const url = `https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=${tf.binanceInterval}&limit=${tf.binanceLimit}`;
+            let data = null;
+            try {
+                const res = await fetch(url);
+                if (res.ok) data = await res.json();
+            } catch (e) {
+                const resProxy = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+                if (resProxy.ok) data = await resProxy.json();
+            }
+            if (data && Array.isArray(data)) data.forEach(k => dataPoints.push({ ts: parseInt(k[0]), price: parseFloat(k[4]) }));
+        } else if (['stock_global', 'stock_br', 'cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType)) {
+            let ticker = sym;
+            if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(assetType) && !ticker.endsWith('.BA')) {
+                ticker = `${ticker}.BA`;
+            } else if (assetType === 'stock_br' && !ticker.endsWith('.SA')) {
+                ticker = `${ticker}.SA`;
+            }
+
+            const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=${tf.yahooRange}&interval=${tf.yahooInterval}`;
+            const data = await fetchWithFallbacks(url);
+            if (data && data?.chart?.result?.[0]) {
+                const result = data.chart.result[0];
+                const timestamps = result.timestamp || [];
+                const prices = result.indicators?.quote?.[0]?.close || [];
+                timestamps.forEach((ts, i) => { if (prices[i] !== null && prices[i] !== undefined) dataPoints.push({ ts: ts * 1000, price: prices[i] }); });
+            }
+        }
+    } catch (e) {}
+    return dataPoints;
+};
+
 const getCryptoCategory = (symbol, t) => {
     const s = symbol.toUpperCase();
     if (['USDT','USDC','DAI','FDUSD','TUSD'].includes(s)) return t.stablecoins;
@@ -221,13 +317,233 @@ const getAccountIcon = (type) => {
     }
 };
 
-// Formatea un valor crudo que ya fue convertido a la divisa correspondiente
 const formatCurrencyRaw = (val, currency) => {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: currency,
         minimumFractionDigits: 2
     }).format(val);
+};
+
+// Función auxiliar para renderizar con formato estético los textos de Markdown que retorna Gemini (Definida en ámbito global para evitar TDZ)
+const renderFormattedAiText = (rawText) => {
+    if (!rawText) return null;
+    return rawText.split('\n').map((line, idx) => {
+        let processedLine = line;
+        let className = "text-slate-700 text-[15px] leading-relaxed mb-2.5";
+
+        if (line.startsWith('### ')) {
+            className = "text-md font-extrabold text-slate-900 mt-5 mb-3 flex items-center gap-2 border-b border-slate-100 pb-1.5";
+            processedLine = line.replace('### ', '');
+        } else if (line.startsWith('## ')) {
+            className = "text-lg font-black text-indigo-900 mt-6 mb-3 flex items-center gap-2 border-b border-indigo-100 pb-2";
+            processedLine = line.replace('## ', '');
+        } else if (line.startsWith('# ')) {
+            className = "text-xl font-black text-slate-900 mt-7 mb-4";
+            processedLine = line.replace('# ', '');
+        } else if (line.startsWith('- ') || line.startsWith('* ')) {
+            className = "text-slate-700 text-[15px] pl-4 mb-2 list-disc ml-2";
+            processedLine = line.substring(2);
+        }
+
+        const boldRegex = /\*\*(.*?)\*\*/g;
+        const parts = [];
+        let lastIndex = 0;
+        let match;
+
+        while ((match = boldRegex.exec(processedLine)) !== null) {
+            if (match.index > lastIndex) parts.push(processedLine.substring(lastIndex, match.index));
+            parts.push(<strong key={match.index} className="font-extrabold text-slate-900 bg-indigo-50/50 px-1 rounded">{match[1]}</strong>);
+            lastIndex = boldRegex.lastIndex;
+        }
+        if (lastIndex < processedLine.length) parts.push(processedLine.substring(lastIndex));
+
+        return <p key={idx} className={className}>{parts.length > 0 ? parts : processedLine}</p>;
+    });
+};
+
+// --- MODAL DETALLE DE ACTIVOS (RECONSTITUIDO DE FORMA SANA) ---
+const AssetDetailsModal = ({ asset, onUpdateApy, onAddTransaction, onClose, lang }) => {
+    const t = TRANSLATIONS[lang];
+    const [tab, setTab] = useState('info');
+    const [apy, setApy] = useState(asset.apy || '');
+    const [apyDate, setApyDate] = useState(asset.apyStartDate || new Date().toISOString().split('T')[0]);
+    
+    const [txType, setTxType] = useState('buy');
+    const [txAmount, setTxAmount] = useState('');
+    const [txPrice, setTxPrice] = useState(asset.purchasePrice || '');
+    const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
+
+    const [chartTimeframe, setChartTimeframe] = useState('1M');
+    const [chartData, setChartData] = useState([]);
+    const [isChartLoading, setIsChartLoading] = useState(false);
+
+    const isFiat = asset.assetType === 'fiat' || asset.assetType === 'manual';
+
+    const yieldAmount = React.useMemo(() => {
+        return getAssetYieldAmount(asset);
+    }, [asset]);
+
+    useEffect(() => { 
+        if (tab === 'chart') loadChartData(); 
+    }, [tab, chartTimeframe]);
+
+    const loadChartData = async () => {
+        setIsChartLoading(true); setChartData([]);
+        const history = await fetchHistoricalData(asset.symbol, asset.assetType, chartTimeframe);
+        setChartData(history.map(item => ({
+            date: new Date(item.ts).toLocaleDateString('es-AR', { month: 'short', day: 'numeric', hour: ['1D', '5D'].includes(chartTimeframe) ? '2-digit' : undefined, minute: ['1D', '5D'].includes(chartTimeframe) ? '2-digit' : undefined }),
+            price: item.price
+        })));
+        setIsChartLoading(false);
+    };
+
+    const isChartPositive = chartData.length > 1 && chartData[chartData.length - 1].price >= chartData[0].price;
+    const chartColor = isChartPositive ? '#10b981' : '#ef4444';
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col animate-fade-in">
+                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-900">Activo: {asset.symbol}</h3>
+                        <p className="text-sm text-slate-500">Monto: {(parseFloat(asset.amount) + yieldAmount).toFixed(isFiat ? 2 : 4)}</p>
+                    </div>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-700 bg-slate-200 px-4 py-2 rounded-xl transition-colors font-bold text-xs">Cerrar</button>
+                </div>
+                
+                <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
+                    <button onClick={() => setTab('info')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors ${tab === 'info' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>Resumen & APY</button>
+                    <button onClick={() => setTab('history')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors ${tab === 'history' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}>Historial</button>
+                    {(!['manual', 'fiat', 'caucion_ar', 'fci_ar'].includes(asset.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(asset.symbol.toUpperCase())) && (
+                        <button onClick={() => setTab('chart')} className={`px-4 py-3 font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-1 ${tab === 'chart' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}><LineChartIcon className="w-4 h-4"/> Gráfico</button>
+                    )}
+                </div>
+
+                <div className="p-6 overflow-y-auto">
+                    {tab === 'info' && (
+                        <div className="space-y-6">
+                            <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex justify-between items-center">
+                                <div>
+                                    <p className="text-sm text-green-800 font-bold mb-1">Rendimiento APY Generado</p>
+                                    <p className="text-3xl font-black text-green-600">+{yieldAmount.toFixed(isFiat ? 2 : 4)} <span className="text-lg">{asset.symbol}</span></p>
+                                </div>
+                                <Activity className="w-10 h-10 text-green-300" />
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <h4 className="font-bold text-slate-800 flex items-center gap-2"><Settings className="w-4 h-4"/> Configuración APY</h4>
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Tasa APY (%)</label>
+                                        <InputField type="number" step="any" min="0" value={apy} onChange={(e) => setApy(e.target.value)} placeholder="Ej: 12" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Fecha de Inicio</label>
+                                        <InputField type="date" value={apyDate} onChange={(e) => setApyDate(e.target.value)} />
+                                    </div>
+                                </div>
+                                <button onClick={() => onUpdateApy(apy, apyDate)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-sm">Guardar</button>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {tab === 'history' && (
+                        <div className="space-y-6">
+                            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-3">
+                                <h4 className="font-bold text-blue-900 text-sm flex items-center gap-2"><Plus className="w-4 h-4"/> Añadir Actividad</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <SelectField value={txType} onChange={(e) => setTxType(e.target.value)} className="py-2 text-sm">
+                                        <option value="buy">Compra / Depósito</option>
+                                        <option value="sell">Venta / Retiro</option>
+                                    </SelectField>
+                                    <InputField type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="py-2 text-sm" />
+                                    <InputField type="number" step="any" min="0" placeholder="Cantidad" value={txAmount} onChange={(e) => setTxAmount(e.target.value)} className="py-2 text-sm" />
+                                    <InputField type="number" step="any" min="0" placeholder="Precio USD" value={txPrice} onChange={(e) => setTxPrice(e.target.value)} className="py-2 text-sm" />
+                                </div>
+                                <button onClick={(e) => { e.preventDefault(); if(txAmount) onAddTransaction({ type: txType, amount: txAmount, price: txPrice, date: txDate }); setTxAmount(''); setTxPrice(''); }} className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors">Guardar</button>
+                            </div>
+
+                            <div>
+                                <h4 className="font-bold text-slate-800 text-sm mb-3">Historial</h4>
+                                <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                    {!asset.transactions || asset.transactions.length === 0 ? (
+                                        <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-100 text-center">No hay actividad.</p>
+                                    ) : (
+                                        asset.transactions.map((tx, idx) => (
+                                            <div key={idx} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-lg shadow-sm">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 border ${tx.type === 'buy' ? 'border-green-200 text-green-600' : 'border-red-200 text-red-600'}`}>
+                                                        {tx.type === 'buy' ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-800">{tx.type === 'buy' ? 'Compra' : 'Venta'}</p>
+                                                        <p className="text-xs text-slate-500">{tx.date}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className={`text-sm font-bold ${tx.type === 'buy' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'buy' ? '+' : '-'}{parseFloat(tx.amount).toFixed(isFiat ? 2 : 4)}</p>
+                                                    {parseFloat(tx.price) > 0 && <p className="text-xs text-slate-500">${parseFloat(tx.price).toFixed(2)} USD c/u</p>}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === 'chart' && (
+                        <div className="space-y-4">
+                            <div className="flex gap-2 bg-slate-100 p-1 rounded-lg overflow-x-auto">
+                                {TIMEFRAMES.map(tf => (
+                                    <button key={tf.label} onClick={() => setChartTimeframe(tf.label)} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${chartTimeframe === tf.label ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>
+                                        {tf.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 relative">
+                                {isChartLoading && <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}
+                                <div className="h-64">
+                                    {chartData.length > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/>
+                                                        <stop offset="95%" stopColor={chartColor} stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
+                                                <XAxis dataKey="date" hide />
+                                                <YAxis domain={['auto', 'auto']} hide />
+                                                <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '12px' }} itemStyle={{ color: chartColor, fontWeight: '900', fontSize: '16px' }} formatter={(value) => [value.toFixed(2), 'Precio']} />
+                                                <Area type="monotone" dataKey="price" stroke={chartColor} strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    ) : (!isChartLoading && <div className="h-full flex items-center justify-center text-slate-400 text-sm">Sin datos suficientes.</div>)}
+                                </div>
+                                {chartData.length > 0 && (
+                                    <div className="mt-4 flex justify-between items-center px-2">
+                                        <div>
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Precio Actual</p>
+                                            <p className={`text-xl font-black ${isChartPositive ? 'text-green-600' : 'text-red-500'}`}>{chartData[chartData.length - 1].price.toFixed(2)}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Variación</p>
+                                            <p className={`text-sm font-bold flex items-center justify-end gap-1 ${isChartPositive ? 'text-green-600' : 'text-red-500'}`}>
+                                                {isChartPositive ? <ArrowUpRight className="w-4 h-4"/> : <ArrowDownRight className="w-4 h-4"/>}
+                                                {Math.abs(chartData[chartData.length - 1].price - chartData[0].price).toFixed(2)} 
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default function App() {
@@ -241,8 +557,14 @@ export default function App() {
     const [marketPrices, setMarketPrices] = useState({});
     const [isLoadingPrices, setIsLoadingPrices] = useState(false);
     
-    // --- ESTADOS DE SINCRONIZACIÓN AUTOMÁTICA ---
-    const [syncKey, setSyncKey] = useState(() => localStorage.getItem('DikyStarSyncKey') || 'dikystar-anon-user');
+    // --- ESTADOS DE SINCRONIZACIÓN AUTOMÁTICA SIN CONTRASEÑA ---
+    const [syncKey, setSyncKey] = useState(() => {
+        const stored = localStorage.getItem('DikyStarSyncKey');
+        if (stored && stored.trim() !== "") return stored;
+        const randomCode = 'dikystar-' + Math.random().toString(36).substring(2, 10);
+        localStorage.setItem('DikyStarSyncKey', randomCode);
+        return randomCode;
+    });
     const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
     const [tempSyncKey, setTempSyncKey] = useState('');
     const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'local'
@@ -281,7 +603,7 @@ export default function App() {
     const [aiError, setAiError] = useState('');
     const chatEndRef = useRef(null);
 
-    // --- ESTADÍSTICAS GLOBALES CON MEMOIZACIÓN (GARANTIZA DEFINICIÓN INMEDIATA) ---
+    // --- ESTADÍSTICAS GLOBALES CON MEMOIZACIÓN ---
     const globalStats = React.useMemo(() => {
         return portfolios.reduce((acc, port) => {
             if (activePortfolioId !== 'all' && port.id !== activePortfolioId) return acc;
@@ -301,6 +623,66 @@ export default function App() {
     // Formatea un valor en dólares estadounidenses convirtiéndolo automáticamente
     const formatCurrency = (val, cur = null) => {
         return formatCurrencyRaw(val * (cur === 'USD' ? 1 : getDisplayRate()), cur || displayCurrency);
+    };
+
+    // --- RENDERIZADO GRÁFICO HISTÓRICO GLOBAL ---
+    const loadGlobalChart = async () => {
+        if (portfolios.length === 0) return;
+        setIsGlobalChartLoading(true);
+        let allAssets = [];
+        portfolios.forEach(port => {
+            if (activePortfolioId === 'all' || port.id === activePortfolioId) {
+                port.accounts.forEach(acc => { acc.assets.forEach(asset => allAssets.push(asset)); });
+            }
+        });
+
+        const uniqueAssetsMap = {};
+        allAssets.forEach(a => {
+            if (!['manual', 'caucion_ar', 'fci_ar'].includes(a.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(a.symbol.toUpperCase())) {
+                uniqueAssetsMap[a.symbol.toUpperCase()] = a.assetType;
+            }
+        });
+
+        const historyMap = {}; 
+        for (const sym of Object.keys(uniqueAssetsMap)) historyMap[sym] = await fetchHistoricalData(sym, uniqueAssetsMap[sym], globalChartTimeframe);
+
+        const allTimestampsSet = new Set();
+        Object.values(historyMap).forEach(arr => {
+            arr.forEach(point => allTimestampsSet.add(point.ts));
+        });
+        const sortedTs = Array.from(allTimestampsSet).sort((a,b) => a - b);
+
+        const aggregatedData = [];
+        const lastKnownPrices = {}; 
+
+        sortedTs.forEach(ts => {
+            Object.keys(historyMap).forEach(sym => {
+                const point = historyMap[sym].find(p => p.ts === ts);
+                if (point) lastKnownPrices[sym] = point.price;
+            });
+            let totalUSD = 0;
+            allAssets.forEach(asset => {
+                const sym = asset.symbol.toUpperCase();
+                const amt = getAssetTotalAmount(asset);
+                
+                if (['USD', 'USDT', 'USDC', 'DAI'].includes(sym)) totalUSD += amt;
+                else if (sym === 'ARS') totalUSD += amt / (forexRates.ARS || 1000);
+                else if (sym === 'EUR') totalUSD += amt / (forexRates.EUR || 0.92);
+                else if (sym === 'BRL') totalUSD += amt / (forexRates.BRL || 5.15);
+                else if (['manual', 'caucion_ar'].includes(asset.assetType)) totalUSD += amt;
+                else if (lastKnownPrices[sym]) {
+                    let historicalPrice = lastKnownPrices[sym];
+                    if (['accion_ar', 'bono_ar', 'cedear_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) historicalPrice = historicalPrice / (forexRates.ARS || 1000);
+                    totalUSD += amt * historicalPrice;
+                } else if (asset.purchasePrice) totalUSD += amt * parseFloat(asset.purchasePrice);
+            });
+            aggregatedData.push({
+                date: new Date(ts).toLocaleDateString('es-AR', { month: 'short', day: 'numeric', hour: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined, minute: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined }),
+                price: totalUSD * (displayCurrency === 'USD' ? 1 : (forexRates[displayCurrency] || 1))
+            });
+        });
+        setGlobalChartData(aggregatedData);
+        setIsGlobalChartLoading(false);
     };
 
     // --- METODOS DE INTERFAZ Y DATOS ---
@@ -347,8 +729,8 @@ export default function App() {
                     const d = await fetchWithFallbacks(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?range=1d&interval=1d`);
                     if(d?.chart?.result?.[0]?.meta?.regularMarketPrice) {
                         let rawPrice = d.chart.result[0].meta.regularMarketPrice;
-                        if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) rawPrice = rawPrice / (nR.ARS || 1000);
-                        if (asset.assetType === 'stock_br') rawPrice = rawPrice / (nR.BRL || 5.15);
+                        if (['cedear_ar', 'accion_ar', 'bono_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) rawPrice = rawPrice / (forexRates.ARS || 1000); 
+                        if (asset.assetType === 'stock_br') rawPrice = rawPrice / (forexRates.BRL || 5.15);
                         nP[sym] = rawPrice;
                     }
                 }
@@ -356,6 +738,109 @@ export default function App() {
         }
         setMarketPrices(nP); setIsLoadingPrices(false);
         if (dashboardTab === 'evolution') loadGlobalChart();
+    };
+
+    // --- ASESOR DE IA (CHAT) ---
+    const handleSendAiMessage = async (e = null, quickPrompt = null) => {
+        if (e) e.preventDefault();
+        const userText = quickPrompt || aiInput;
+        if (!userText.trim()) return;
+
+        const newMessages = [...aiMessages, { role: 'user', text: userText, isQuick: !!quickPrompt }];
+        setAiMessages(newMessages);
+        setAiInput('');
+        setAiLoading(true);
+        setAiError('');
+
+        const simplifiedPortfolio = portfolios.map(p => ({
+            cartera: p.name,
+            activos: p.accounts.flatMap(a => a.assets.map(as => ({
+                simbolo: as.symbol, 
+                tipo: as.assetType,
+                unidades: parseFloat(as.amount).toFixed(4),
+                valor_actual_usd: getAssetValueUSD(as, marketPrices, forexRates).toFixed(2)
+            })))
+        }));
+
+        const systemPrompt = `
+        Eres DikyStar AI, un asesor y analista financiero de élite, sumamente especializado en mercados globales, Argentina y Brasil.
+        Tu objetivo es ofrecer respuestas directas, profesionales, estructuradas y precisas al usuario.
+        
+        INFORMACIÓN ESTRICTAMENTE ACTUALIZADA EN VIVO DEL USUARIO:
+        - Perfil de Riesgo del Inversor: ${investorProfile.toUpperCase()}
+        - Patrimonio Total: $${globalStats.current.toFixed(2)} USD
+        - Composición de Cartera Actual: ${JSON.stringify(simplifiedPortfolio)}
+        - Precios en Vivo (obtenidos de Binance y Yahoo Finance): ${JSON.stringify(marketPrices)}
+        - Tipos de Cambio Reales: ARS (Dólar Blue) = ${forexRates.ARS}, EUR = ${forexRates.EUR}, BRL = ${forexRates.BRL}
+
+        INSTRUCCIONES CLAVE:
+        1. Utiliza los precios y datos de la cartera provistos arriba como fuente de verdad absoluta. No intentes adivinarlos.
+        2. Si el usuario pide un análisis de cartera, audita los datos que te he pasado, critica la diversificación y sugiere activos concretos y específicos de acuerdo a su Perfil de Riesgo y el entorno macro actual.
+        3. Si pide noticias o calendario, usa el Grounding de Google Search para darle información relevante a HOY.
+        4. Escribe tus respuestas usando formato Markdown para que sean legibles (usa negritas, listas y subtítulos).
+        `;
+
+        const chatHistory = newMessages.filter(m => !m.isQuick).map(m => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }]
+        }));
+
+        if (!!quickPrompt) {
+            chatHistory.push({ role: 'user', parts: [{ text: quickPrompt }] });
+        }
+
+        const payload = {
+            contents: chatHistory,
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            tools: [{ "google_search": {} }] 
+        };
+
+        const apiKey = ""; 
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        const delay = (ms) => new Promise(res => setTimeout(res, ms));
+        const backoffTimes = [1000, 2000, 4000, 8000, 16000];
+        let attempt = 0;
+        let success = false;
+
+        while (attempt < 5) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (textResponse) {
+                        setAiMessages(prev => [...prev, { role: 'model', text: textResponse }]);
+                        success = true;
+                        break;
+                    }
+                }
+                attempt++;
+                await delay(backoffTimes[attempt - 1]);
+            } catch (e) {
+                attempt++;
+                if (attempt === 5) setAiError(t.aiErrorMsg);
+                else await delay(backoffTimes[attempt - 1]);
+            }
+        }
+
+        if (!success && !aiError) setAiError(t.aiErrorMsg);
+        setAiLoading(false);
+    };
+
+    // --- ACCIÓN DE GUARDADO DE CANAL DE SINCRONIZACIÓN ---
+    const handleSetSyncKey = (e) => {
+        e.preventDefault();
+        if (!tempSyncKey.trim()) return;
+        const cleanKey = tempSyncKey.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+        setSyncKey(cleanKey);
+        localStorage.setItem('DikyStarSyncKey', cleanKey);
+        setIsSyncModalOpen(false);
+        setTempSyncKey('');
     };
 
     // --- CARGAR DATOS INICIALES ---
@@ -413,6 +898,12 @@ export default function App() {
             saveDataToCloud();
         }
     }, [portfolios]);
+
+    useEffect(() => {
+        if (dashboardTab === 'evolution') {
+            loadGlobalChart();
+        }
+    }, [dashboardTab, globalChartTimeframe, activePortfolioId]);
 
     // --- ACCIONES DE CARTERA ---
     const handleAddPortfolio = (e) => {
@@ -556,191 +1047,6 @@ export default function App() {
         setIsFetchingHistory(false);
     };
 
-    // --- ASESOR DE IA (CHAT) ---
-    const handleSendAiMessage = async (e = null, quickPrompt = null) => {
-        if (e) e.preventDefault();
-        const userText = quickPrompt || aiInput;
-        if (!userText.trim()) return;
-
-        const newMessages = [...aiMessages, { role: 'user', text: userText, isQuick: !!quickPrompt }];
-        setAiMessages(newMessages);
-        setAiInput('');
-        setAiLoading(true);
-        setAiError('');
-
-        const simplifiedPortfolio = portfolios.map(p => ({
-            cartera: p.name,
-            activos: p.accounts.flatMap(a => a.assets.map(as => ({
-                simbolo: as.symbol, 
-                tipo: as.assetType,
-                unidades: parseFloat(as.amount).toFixed(4),
-                valor_actual_usd: getAssetValueUSD(as, marketPrices, forexRates).toFixed(2)
-            })))
-        }));
-
-        const systemPrompt = `
-        Eres DikyStar AI, un asesor y analista financiero de élite, sumamente especializado en mercados globales, Argentina y Brasil.
-        Tu objetivo es ofrecer respuestas directas, profesionales, estructuradas y precisas al usuario.
-        
-        INFORMACIÓN ESTRICTAMENTE ACTUALIZADA EN VIVO DEL USUARIO:
-        - Perfil de Riesgo del Inversor: ${investorProfile.toUpperCase()}
-        - Patrimonio Total: $${globalStats.current.toFixed(2)} USD
-        - Composición de Cartera Actual: ${JSON.stringify(simplifiedPortfolio)}
-        - Precios en Vivo (obtenidos de Binance y Yahoo Finance): ${JSON.stringify(marketPrices)}
-        - Tipos de Cambio Reales: ARS (Dólar Blue) = ${forexRates.ARS}, EUR = ${forexRates.EUR}, BRL = ${forexRates.BRL}
-
-        INSTRUCCIONES CLAVE:
-        1. Utiliza los precios y datos de la cartera provistos arriba como fuente de verdad absoluta. No intentes adivinarlos.
-        2. Si el usuario pide un análisis de cartera, audita los datos que te he pasado, critica la diversificación y sugiere activos concretos y específicos de acuerdo a su Perfil de Riesgo y el entorno macro actual.
-        3. Si pide noticias o calendario, usa el Grounding de Google Search para darle información relevante a HOY.
-        4. Escribe tus respuestas usando formato Markdown para que sean legibles (usa negritas, listas y subtítulos).
-        `;
-
-        const chatHistory = newMessages.filter(m => !m.isQuick).map(m => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: m.text }]
-        }));
-
-        if (!!quickPrompt) {
-            chatHistory.push({ role: 'user', parts: [{ text: quickPrompt }] });
-        }
-
-        const payload = {
-            contents: chatHistory,
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            tools: [{ "google_search": {} }] 
-        };
-
-        const apiKey = ""; 
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-        const delay = (ms) => new Promise(res => setTimeout(res, ms));
-        const backoffTimes = [1000, 2000, 4000, 8000, 16000];
-        let attempt = 0;
-        let success = false;
-
-        while (attempt < 5) {
-            try {
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (response.ok) {
-                    const result = await response.json();
-                    const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (textResponse) {
-                        setAiMessages(prev => [...prev, { role: 'model', text: textResponse }]);
-                        success = true;
-                        break;
-                    }
-                }
-                attempt++;
-                await delay(backoffTimes[attempt - 1]);
-            } catch (e) {
-                attempt++;
-                if (attempt === 5) setAiError(t.aiErrorMsg);
-                else await delay(backoffTimes[attempt - 1]);
-            }
-        }
-
-        if (!success && !aiError) setAiError(t.aiErrorMsg);
-        setAiLoading(false);
-    };
-
-    const renderFormattedAiText = (rawText) => {
-        if (!rawText) return null;
-        return rawText.split('\n').map((line, idx) => {
-            let processedLine = line;
-            let className = "text-slate-700 text-[15px] leading-relaxed mb-2.5";
-
-            if (line.startsWith('### ')) {
-                className = "text-md font-extrabold text-slate-900 mt-5 mb-3 flex items-center gap-2 border-b border-slate-100 pb-1.5";
-                processedLine = line.replace('### ', '');
-            } else if (line.startsWith('## ')) {
-                className = "text-lg font-black text-indigo-900 mt-6 mb-3 flex items-center gap-2 border-b border-indigo-100 pb-2";
-                processedLine = line.replace('## ', '');
-            } else if (line.startsWith('# ')) {
-                className = "text-xl font-black text-slate-900 mt-7 mb-4";
-                processedLine = line.replace('# ', '');
-            } else if (line.startsWith('- ') || line.startsWith('* ')) {
-                className = "text-slate-700 text-[15px] pl-4 mb-2 list-disc ml-2";
-                processedLine = line.substring(2);
-            }
-
-            const boldRegex = /\*\*(.*?)\*\*/g;
-            const parts = [];
-            let lastIndex = 0;
-            let match;
-
-            while ((match = boldRegex.exec(processedLine)) !== null) {
-                if (match.index > lastIndex) parts.push(processedLine.substring(lastIndex, match.index));
-                parts.push(<strong key={match.index} className="font-extrabold text-slate-900 bg-indigo-50/50 px-1 rounded">{match[1]}</strong>);
-                lastIndex = boldRegex.lastIndex;
-            }
-            if (lastIndex < processedLine.length) parts.push(processedLine.substring(lastIndex));
-
-            return <p key={idx} className={className}>{parts.length > 0 ? parts : processedLine}</p>;
-        });
-    };
-
-    const loadGlobalChart = async () => {
-        if (portfolios.length === 0) return;
-        setIsGlobalChartLoading(true);
-        let allAssets = [];
-        portfolios.forEach(port => {
-            if (activePortfolioId === 'all' || port.id === activePortfolioId) {
-                port.accounts.forEach(acc => { acc.assets.forEach(asset => allAssets.push(asset)); });
-            }
-        });
-
-        const uniqueAssetsMap = {};
-        allAssets.forEach(a => {
-            if (!['manual', 'caucion_ar', 'fci_ar'].includes(a.assetType) && !['USD', 'USDT', 'USDC', 'DAI', 'ARS', 'EUR', 'BRL'].includes(a.symbol.toUpperCase())) {
-                uniqueAssetsMap[a.symbol.toUpperCase()] = a.assetType;
-            }
-        });
-
-        const historyMap = {}; 
-        for (const sym of Object.keys(uniqueAssetsMap)) historyMap[sym] = await fetchHistoricalData(sym, uniqueAssetsMap[sym], globalChartTimeframe);
-
-        const allTimestampsSet = new Set();
-        Object.values(historyMap).forEach(arr => arr.forEach(point => allTimestampsSet.add(point.ts)));
-        const sortedTs = Array.from(allTimestampsSet).sort((a,b) => a - b);
-
-        const aggregatedData = [];
-        const lastKnownPrices = {}; 
-
-        sortedTs.forEach(ts => {
-            Object.keys(historyMap).forEach(sym => {
-                const point = historyMap[sym].find(p => p.ts === ts);
-                if (point) lastKnownPrices[sym] = point.price;
-            });
-            let totalUSD = 0;
-            allAssets.forEach(asset => {
-                const sym = asset.symbol.toUpperCase();
-                const amt = parseFloat(asset.amount || 0) + (asset.apy ? (parseFloat(asset.amount) * (parseFloat(asset.apy)/100) * ((Date.now() - new Date(asset.apyStartDate).getTime())/(1000*60*60*24*365))) : 0);
-                
-                if (['USD', 'USDT', 'USDC', 'DAI'].includes(sym)) totalUSD += amt;
-                else if (sym === 'ARS') totalUSD += amt / (forexRates.ARS || 1000);
-                else if (sym === 'EUR') totalUSD += amt / (forexRates.EUR || 0.92);
-                else if (sym === 'BRL') totalUSD += amt / (forexRates.BRL || 5.15);
-                else if (['manual', 'caucion_ar'].includes(asset.assetType)) totalUSD += amt;
-                else if (lastKnownPrices[sym]) {
-                    let historicalPrice = lastKnownPrices[sym];
-                    if (['accion_ar', 'bono_ar', 'cedear_ar', 'on_ar', 'letra_ar'].includes(asset.assetType)) historicalPrice = historicalPrice / (forexRates.ARS || 1000);
-                    totalUSD += amt * historicalPrice;
-                } else if (asset.purchasePrice) totalUSD += amt * parseFloat(asset.purchasePrice);
-            });
-            aggregatedData.push({
-                date: new Date(ts).toLocaleDateString('es-AR', { month: 'short', day: 'numeric', hour: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined, minute: ['1D', '5D'].includes(globalChartTimeframe) ? '2-digit' : undefined }),
-                price: totalUSD * (displayCurrency === 'USD' ? 1 : (forexRates[displayCurrency] || 1))
-            });
-        });
-        setGlobalChartData(aggregatedData);
-        setIsGlobalChartLoading(false);
-    };
-
     return (
         <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 animate-fade-in">
             <div className="max-w-6xl mx-auto space-y-6">
@@ -862,7 +1168,7 @@ export default function App() {
                             {dashboardTab === 'evolution' && (
                                 <div className="space-y-4">
                                     <div className="flex gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto scrollbar-hide">
-                                        {TIMEFRAMES.map(tf => <button key={tf.label} onClick={() => setGlobalChartTimeframe(tf.label)} className={`flex-1 py-1 px-2 text-xs font-bold rounded-md transition-colors ${globalChartTimeframe === tf.label ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>{tf.label}</button>)}
+                                        {TIMEFRAMES.map(tf => <button key={tf.label} onClick={() => setDashboardTab('evolution')} className={`flex-1 py-1 px-2 text-xs font-bold rounded-md transition-colors ${globalChartTimeframe === tf.label ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>{tf.label}</button>)}
                                     </div>
                                     <div className={`h-56 relative ${!showBalances ? 'blur-md opacity-40 select-none pointer-events-none' : ''}`}>
                                         {isGlobalChartLoading && <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>}
@@ -1182,7 +1488,7 @@ export default function App() {
                     return (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto">
-                            <div className="p-6 border-b border-slate-100 bg-slate-50 sticky top-0 z-10"><h3 className="text-xl font-bold text-slate-900">{t.addAsset}</h3></div>
+                            <div className="p-6 border-b border-slate-100 bg-slate-50 sticky top-0 z-10"><h3 className="text-xl font-bold">{t.addAsset}</h3></div>
                             <form onSubmit={handleAddAsset} className="p-6 space-y-4">
                                 <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.type}</label><SelectField value={newAsset.assetType} onChange={(e) => setNewAsset({...newAsset, assetType: e.target.value})}>
                                     {isArBroker ? (
@@ -1198,8 +1504,8 @@ export default function App() {
                                     <div><label className="block text-sm font-bold mb-1 text-slate-700">{t.amount}</label><InputField type="number" step="any" required min="0" value={newAsset.amount} onChange={(e) => setNewAsset({...newAsset, amount: e.target.value})} placeholder="Ej: 0.5"/></div>
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                                    <div><label className="block text-sm font-medium mb-1 text-slate-700">{t.purchaseDate}</label><InputField type="date" value={newAsset.purchaseDate} onChange={(e) => { setNewAsset({...newAsset, purchaseDate: e.target.value}); setIsFetchingHistory(true); fetchHistoricalPrice(newAsset.symbol, newAsset.assetType, e.target.value).then(() => setIsFetchingHistory(false)); }}/></div>
-                                    <div><label className="block text-sm font-medium mb-1 text-slate-700 flex justify-between"><span>{t.purchasePrice}</span>{isFetchingHistory && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}</label><InputField type="number" step="any" min="0" value={newAsset.purchasePrice} onChange={(e) => setNewAsset({...newAsset, purchasePrice: e.target.value})}/></div>
+                                    <div><label className="block text-sm font-medium mb-1 text-slate-700">Fecha de Compra (Opcional)</label><InputField type="date" value={newAsset.purchaseDate} onChange={(e) => { setNewAsset({...newAsset, purchaseDate: e.target.value}); setIsFetchingHistory(true); fetchHistoricalPrice(newAsset.symbol, newAsset.assetType, e.target.value).then(() => setIsFetchingHistory(false)); }}/></div>
+                                    <div><label className="block text-sm font-medium mb-1 text-slate-700 flex justify-between"><span>Precio de Compra USD (Opcional)</span>{isFetchingHistory && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}</label><InputField type="number" step="any" min="0" value={newAsset.purchasePrice} onChange={(e) => setNewAsset({...newAsset, purchasePrice: e.target.value})}/></div>
                                 </div>
                                 <div className="flex gap-3 pt-2"><button type="button" onClick={() => setIsAddingAsset({ active: false })} className="flex-1 px-4 py-3 bg-slate-100 rounded-xl font-bold text-slate-700">{t.cancel}</button><button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold">{t.addAsset}</button></div>
                             </form>
